@@ -1,0 +1,275 @@
+---
+title: "<br><br>Análisis de datos Ómicos<br>Primera prueba de evaluación continua<br>"
+author: "Maria P. Plaza"
+date: "16/04/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+require(knitr)
+knitr::opts_chunk$set(comment = NA, prompt = TRUE, tidy = FALSE, 
+               fig.width = 7, fig.height = 7,echo = TRUE, 
+               message = FALSE, warning = FALSE, cache=FALSE)
+Sys.setlocale("LC_TIME", "C")
+
+```
+
+```{r packages, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+BiocManager::install(version = "3.10")
+Bioconductor version 3.10 (BiocManager 1.30.10), ?BiocManager::install for help
+#Para instalar los paquetes específicos:
+BiocManager :: install (c ("Biobase", "methods", "affy"))
+BiocManager::install("GEOquery")
+BiocManager::install("Simpleaffy")
+BiocManager::install("arrayQualityMetrics")
+BiocManager::install("biocLite")
+
+install.packages("colorspace")
+install.packages("ggplot2")
+install.packages("ggrepel")
+install.packages("htmlTable")
+install.packages("prettydoc")
+install.packages("devtools")
+BiocManager::install("oligo")
+BiocManager::install("pd.mogene.2.1.st")
+BiocManager::install("arrayQualityMetrics")
+BiocManager::install("pvca")
+# NOT NEEDED UNTIL ANALYSES ARE PERFORMED
+BiocManager::install("limma")
+BiocManager::install("genefilter")
+BiocManager::install("mogene21sttranscriptcluster.db")
+BiocManager::install("annotate")
+BiocManager::install("org.Mm.eg.db")
+BiocManager::install("ReactomePA")
+BiocManager::install("reactome.db")
+
+
+library(BiocManager)
+library(GEOquery)
+library(arrayQualityMetrics)
+library(affy)
+library(Biobase)
+library(methods)
+
+```
+# Análisis de Microarrays
+
+## 0. Abstract, con un resumen breve de no más de cinco líneas.
+
+articulo
+
+https://www.ncbi.nlm.nih.gov/pubmed/31344396
+
+
+## 1.Introducción (cambiar)
+
+Utilizará una muestra de datos de expresión de un estudio que usa matrices U95A Affymetrix (un color) que se hibridaron con tejidos de hígado y tejido cerebral fetal y humano. Cada hibridación se realizó por duplicado. Muchos otros tejidos también fueron perfilados, pero no se utilizarán para estos ejercicios.
+
+Qué haremos para analizar estos datos:
+
+ - preprocesar los datos sin procesar (resumir las mediciones de la sonda en una medición para cada sonda)
+ - normalizar los datos de estos ocho chips
+ - calcular llamadas ausentes / presentes que intentan etiquetar genes que están "expresados"
+ - calcular las relaciones de expresión de genes entre dos tejidos diferentes
+ - usar una prueba estadística común para identificar genes expresados diferencialmente
+ - Marcar datos de baja intensidad (muy probablemente ruido de fondo)
+ - agrupar un subconjunto expresado diferencialmente de todos los genes para identificar aquellos con perfiles de expresión similares
+ - trate de encontrar qué funciones tienen en común grupos específicos de genes (con perfiles de expresión similares)
+
+Información preliminar: análisis de imagen y cálculo del valor de expresión.
+
+Como se describe en Su et al., 2002 , las muestras de tejido humano se hibridaron en matrices Affymetrix (un color) y se escanearon los chips. Para cada tejido, al menos dos muestras independientes se hibridaron para formar chips separados.
+
+Las imágenes escaneadas se cuantificaron (incluida la medición del fondo) utilizando un software estándar.
+
+## 2. Objetivos: Que se pretende con este estudio
+
+El objetivo de este documento es ilustrar de forma breve pero completa como se hace un análisis de microarrays con Bioconductor y R. En cada etapa se puede proceder de varias formas lo que da lugar a un gran  número de posibilidades. Se describe en este caso una sola de las opciones posibles para cada paso, lo que constituye un proceso ``al estilo Bioconductor''.
+
+El ejemplo analizado consiste en unos datos descargables en el siguiente link:
+https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE125975 
+
+Se trata de un estudio en el que se analizan los perfiles de expresión génica de tejidos hepáticos no tumorales de 392 pacientes con HCC (carcinoma hepatocelular) en estadio temprano (conjunto de entrenamiento, n = 167 y conjunto de validación, n = 225) y tejido hepático de pacientes con cirrosis sin HCC (n = 216, controles) para identificar cambios en la expresión de genes que regulan la respuesta inmune que podría contribuir a la hepatocarcinogénesis.
+
+ El análisis del transcriptoma del genoma completo se obtuvo usando ene Chip HT MG-430 (Affymetrix). Los datos de expresión sin procesar de microarrays se normalizaron utilizando el algoritmo robusto de múltiples matrices (Irizarry RA et al, Nucleic Acids Res, 2003) con una definición de conjunto de sonda personalizada que mapeó las sondas a las ID de genes de Entrez (HTMG430PM_Mm_ENTREZG) (Dai M et al, Nucleic Acids Res, 2005).
+
+
+## 3. Materiales y Métodos
+
+### 3. 1. Obtención y lectura de datos (Naturaleza de los datos, tipo de experimento, diseño experimental, tipo de microarrays utilizados,…)
+
+**OBTENCIÓN Y CISUALIZACIÓN DE LOS DATOS**
+
+Tal y como nos sugieren en el enunciado, busco un estudio que realizado con microarrays de marca Afymetrix, es decir que utilizan archivos .CEL. Para ello hacemos la busqueda en el sihuiente enlace:
+
+https://www.ncbi.nlm.nih.gov/geo/browse/
+
+El articulo escogido, con 22 muestras, se denomina: *An Immune Gene Expression Signature Associated With Development of Human Hepatocellular Carcinoma Identifies Mice That Respond to Chemopreventive Agents*
+
+y se encuentra en el siguiente enlace:
+
+```{r}
+# Para acceder a GEO Sample (GSM), GEO Series (GSE) (listas de archivos GSM que juntos forman un solo experimento) o GEO Dataset (GDS), empleamos la función getGEO()que devuelve una lista de ExpressionSets
+
+gse <- getGEO("GSE125975", GSEMatrix = TRUE)
+# Vemos los datos:
+gse
+
+# la getGEOSuppFiles() función creará un directorio dentro del directorio de trabajo actual para almacenar los datos sin procesar. Aquí, las rutas de los archivos descargados (a menudo con una extensión .tar) se almacenan en un marco de datos llamado filePaths.
+
+#filePaths = getGEOSuppFiles("GSE125975")
+#filePaths
+
+dim(pData(gse[[1]]))
+```
+
+*Para realizar las anotaciones debéis saber con que modelo de array trabajáis. Esta información la encontrareis en el apartado "plattform" en la ficha del estudio Gene Expression Omnibus*
+
+Platforms (1)	
+GPL21382	[HT_MG-430_PM] Affymetrix HT MG-430 PM Array Plate [CDF: HTMG430PM_Mm_ENTREZG, Brainarray version 19]
+
+Samples (22)
+Less... Less...           
+GSM3587187	QP-4 Control Vehicle
+GSM3587188	QP-49 Control Vehicle
+GSM3587189	QP-50 Control Vehicle
+GSM3587190	QP-76 Model Vehicle
+GSM3587191	QP-77 Model Vehicle
+GSM3587192	QP-78 Model Vehicle
+GSM3587193	QP-79 Model Vehicle
+GSM3587194	QP-80 Model Vehicle
+GSM3587195	QP-81 Model Vehicle
+GSM3587196	QP-92 Model Vehicle
+GSM3587197	QP-93 Model Vehicle
+GSM3587198	QP-94 Model Vehicle
+GSM3587199	QP-82 Model Nintedanib
+GSM3587200	QP-83 Model Nintedanib
+GSM3587201	QP-84 Model Nintedanib
+GSM3587202	QP-85 Model Nintedanib
+GSM3587203	QP-86 Model Nintedanib
+GSM3587204	QP-87 Model Nintedanib
+GSM3587205	QP-88 Model Nintedanib
+GSM3587206	QP-89 Model Nintedanib
+GSM3587207	QP-90 Model Nintedanib
+GSM3587208	QP-91 Model Nintedanib
+
+```{r}
+gpl21382 <- getGEO('GPL21382')
+Meta(gpl21382)$title
+head(Meta(gpl21382)$series_id)
+length(Meta(gpl21382)$series_id)
+head(Meta(gpl21382)$sample_id)
+length(Meta(gpl21382)$sample_id)
+
+gsmids <- Meta(gpl21382)$sample_id
+gsmlist <- sapply(gsmids[1:5],getGEO)
+names(gsmlist)
+
+citation("GEOquery")
+
+sessionInfo()
+```
+
+**NORMALIZACIÓN**
+
+```{r}
+validObject(gse)
+sampleNames(gse)
+varLabels(gse[[1]])
+
+# GEOquery nos da un ExpressionSet con el cual puede que ya estés normalizados. Boxplots nos muestra su distribución.
+
+boxplot(data.frame(exprs(gse[[1]])),main="gse",outline=FALSE)
+boxplot(GSE125975, col=1:4)
+hist(GSE125975, col=1:4, lty=1)
+
+```
+
+Aunque parecen estar normalizados, registramos valores de intensidades brutas de transformación de log2, para asegurarnos:
+
+```{r}
+exprs(gse[[1]])<-log2(exprs(gse[[1]]))
+boxplot(data.frame(exprs(gse[[1]])),main="gse",outline=FALSE)
+```
+
+```{r}
+write.table(gse, file="matrix.txt", quote=F, sep="\t")
+```
+Read an expression matrix in the form of a tab-delimited text file that you created or downloaded above. The first line contains column headers, and the first row (without a header field) contains gene identifiers.
+
+### 2. Métodos que habéis utilizado en el análisis: Procedimiento general de análisis (pasos, “workflow” o “pipeline” que habéis seguido)
+
+```{r}
+# Extract the expression matrix of sample information using exprs:
+mat <- exprs((gse[[1]]))
+dim(mat)
+
+experimentData(gse[[1]])
+
+```
+
+
+```{r}
+matriz.data <- exprs(gse[[1]])
+head(matriz.data)
+
+
+```
+
+
+
+### 3. Que habéis hecho en cada paso (NO ES PRECISO entrar en el detalle de los métodos,más bien hacer una descripción cualitativa indicando porque se ha llevado a cabo cada paso, y cual ha sido el “input” suministrado al procedimiento y el “output” obtenido.
+
+Es preciso especificar 
+– Cual es el propósito del estudio 
+– Que objetivos persigue 
+– Que limitaciones y de que tipo presenta
+Deben tomarse decisiones relativas a aspectos diversos implicados en el experimento 
+– Tipos de muestras
+• Mezcladas (“pooled”) o individuales
+• Con réplicas independientes o sin ellas 
+– Limitaciones físicas (coste)
+• Número de arrays necesarios/posibles
+• Cantidad de material necesaria/disponible
+• De aquí saldrá 
+– La forma en que se realizará el experimento 
+– Los métodos estadísticos que debemos aplicar
+
+Prepocesado(1): Control de calidad
+Preposezado(2): Normalización
+
+Analisis de datos:
+Los investigadores suelen estar interesados en distintos tipos de cuestiones:.
+– Encontrar genes diferencialmente expresados entre dos o más condiciones o a lo largo del tiempo.
+– Identificar nuevos subtipos en una población
+– Descubrir patrones de expresión característicos. 
+– Predecir la respuesta al tratamiento or clasificar un nuevo individuo utilizando información molecular. 
+– Identificar genes co-regulados o expresándose en la misma ruta metabólica.
+
+Métodos de análisis
+• Para cada problema existen múltiples métodos
+– Modelos lineales, pruebas-t con shrinkage para estudios de expresión diferencial
+– Distintos tipos de análisis de conglomerados (“clustering”) para descubrir patrones de corregulación
+– Métodos de clasificación tradicionales (LDA, kNN) y modernos (SVM, PAM) para construir predictores
+– Métodos de análisis basados en la GO (GSEA) para buscar significación biológica
+
+## 4. Resultados
+Que se obtiene como resultado del análisis
+
+## 5. Discusión
+Que limitaciones consideramos que pueden haber en el estudio (si consideramos
+que hay alguna…)
+
+## 6. Conclusión: NO HACE FALTA. Vuestro “rol” aquí es técnico. 
+Como bioinformáticos se os presupondrá la capacidad de manejar la información biológica mediante los programas adecuados, pero ello no implica que debáis tener los conocimientos específicos que puede requerir la interpretación biológica de los resultados.
+
+## 7. Apéndice: 
+Podéis poner el código de R que hayáis utilizado en un apéndice con comentarios.
+
+
+
+
