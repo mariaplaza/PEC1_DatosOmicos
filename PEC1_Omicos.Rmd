@@ -27,47 +27,22 @@ BiocManager::install("GEOquery")
 BiocManager::install("Simpleaffy")
 BiocManager::install("arrayQualityMetrics")
 BiocManager::install("biocLite")
-
-install.packages("colorspace")
-install.packages("ggplot2")
-install.packages("ggrepel")
-install.packages("htmlTable")
-install.packages("prettydoc")
-install.packages("devtools")
-BiocManager::install("oligo")
-BiocManager::install("pd.mogene.2.1.st")
-BiocManager::install("arrayQualityMetrics")
-BiocManager::install("pvca")
-# NOT NEEDED UNTIL ANALYSES ARE PERFORMED
-BiocManager::install("limma")
-BiocManager::install("genefilter")
-BiocManager::install("mogene21sttranscriptcluster.db")
-BiocManager::install("annotate")
-BiocManager::install("org.Mm.eg.db")
-BiocManager::install("ReactomePA")
-BiocManager::install("reactome.db")
-
-
-library(BiocManager)
-library(GEOquery)
-library(arrayQualityMetrics)
-library(affy)
-library(Biobase)
-library(methods)
-
 ```
+
 # Análisis de Microarrays
 
 ## 0. Abstract, con un resumen breve de no más de cinco líneas.
+
+<div style="text-align: justify">
 
 articulo
 
 https://www.ncbi.nlm.nih.gov/pubmed/31344396
 
+El ejemplo analizado consiste en unos datos descargables en el siguiente link:
+https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE125975 
 
 ## 1.Introducción (cambiar)
-
-Utilizará una muestra de datos de expresión de un estudio que usa matrices U95A Affymetrix (un color) que se hibridaron con tejidos de hígado y tejido cerebral fetal y humano. Cada hibridación se realizó por duplicado. Muchos otros tejidos también fueron perfilados, pero no se utilizarán para estos ejercicios.
 
 Qué haremos para analizar estos datos:
 
@@ -80,149 +55,24 @@ Qué haremos para analizar estos datos:
  - agrupar un subconjunto expresado diferencialmente de todos los genes para identificar aquellos con perfiles de expresión similares
  - trate de encontrar qué funciones tienen en común grupos específicos de genes (con perfiles de expresión similares)
 
-Información preliminar: análisis de imagen y cálculo del valor de expresión.
-
-Como se describe en Su et al., 2002 , las muestras de tejido humano se hibridaron en matrices Affymetrix (un color) y se escanearon los chips. Para cada tejido, al menos dos muestras independientes se hibridaron para formar chips separados.
-
-Las imágenes escaneadas se cuantificaron (incluida la medición del fondo) utilizando un software estándar.
-
 ## 2. Objetivos: Que se pretende con este estudio
 
-El objetivo de este documento es ilustrar de forma breve pero completa como se hace un análisis de microarrays con Bioconductor y R. En cada etapa se puede proceder de varias formas lo que da lugar a un gran  número de posibilidades. Se describe en este caso una sola de las opciones posibles para cada paso, lo que constituye un proceso ``al estilo Bioconductor''.
+Se recogieron tejidos hepáticos recién congelados de 22 ratones (3 de control, 9 tratados con vehículo y 10 tratados con nintedanib), y se extrajo el ARN. El análisis del transcriptoma del genoma completo se obtuvo usando ene Chip HT MG-430 (Affymetrix) de acuerdo con los protocolos del fabricante.
 
-El ejemplo analizado consiste en unos datos descargables en el siguiente link:
-https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE125975 
+El objetivo principal que se persigue con nuestro análisis de expresión genética en tumores de ratón es estimar el posible error de clasificación mediante expresión genética de nuevos casos.
 
-Se trata de un estudio en el que se analizan los perfiles de expresión génica de tejidos hepáticos no tumorales de 392 pacientes con HCC (carcinoma hepatocelular) en estadio temprano (conjunto de entrenamiento, n = 167 y conjunto de validación, n = 225) y tejido hepático de pacientes con cirrosis sin HCC (n = 216, controles) para identificar cambios en la expresión de genes que regulan la respuesta inmune que podría contribuir a la hepatocarcinogénesis.
+Los objetivos específicos que se persiguen nos llevan a cubrir un análisis completo de
+microarrays de expresión genética:
 
- El análisis del transcriptoma del genoma completo se obtuvo usando ene Chip HT MG-430 (Affymetrix). Los datos de expresión sin procesar de microarrays se normalizaron utilizando el algoritmo robusto de múltiples matrices (Irizarry RA et al, Nucleic Acids Res, 2003) con una definición de conjunto de sonda personalizada que mapeó las sondas a las ID de genes de Entrez (HTMG430PM_Mm_ENTREZG) (Dai M et al, Nucleic Acids Res, 2005).
+- Control de calidad de microarrays de expresión genética
+- Pre procesado de microarrays
+- Corrección del Background
+- Normalización
+- Sumarización
+- Control de calidad de datos pre procesados
+- Selección de genes diferenciados por expresión
+- Clasificación y evaluación de tejidos tumorales por firmas genéticas
 
-
-## 3. Materiales y Métodos
-
-### 3. 1. Obtención y lectura de datos (Naturaleza de los datos, tipo de experimento, diseño experimental, tipo de microarrays utilizados,…)
-
-**OBTENCIÓN Y CISUALIZACIÓN DE LOS DATOS**
-
-Tal y como nos sugieren en el enunciado, busco un estudio que realizado con microarrays de marca Afymetrix, es decir que utilizan archivos .CEL. Para ello hacemos la busqueda en el sihuiente enlace:
-
-https://www.ncbi.nlm.nih.gov/geo/browse/
-
-El articulo escogido, con 22 muestras, se denomina: *An Immune Gene Expression Signature Associated With Development of Human Hepatocellular Carcinoma Identifies Mice That Respond to Chemopreventive Agents*
-
-y se encuentra en el siguiente enlace:
-
-```{r}
-# Para acceder a GEO Sample (GSM), GEO Series (GSE) (listas de archivos GSM que juntos forman un solo experimento) o GEO Dataset (GDS), empleamos la función getGEO()que devuelve una lista de ExpressionSets
-
-gse <- getGEO("GSE125975", GSEMatrix = TRUE)
-# Vemos los datos:
-gse
-
-# la getGEOSuppFiles() función creará un directorio dentro del directorio de trabajo actual para almacenar los datos sin procesar. Aquí, las rutas de los archivos descargados (a menudo con una extensión .tar) se almacenan en un marco de datos llamado filePaths.
-
-#filePaths = getGEOSuppFiles("GSE125975")
-#filePaths
-
-dim(pData(gse[[1]]))
-```
-
-*Para realizar las anotaciones debéis saber con que modelo de array trabajáis. Esta información la encontrareis en el apartado "plattform" en la ficha del estudio Gene Expression Omnibus*
-
-Platforms (1)	
-GPL21382	[HT_MG-430_PM] Affymetrix HT MG-430 PM Array Plate [CDF: HTMG430PM_Mm_ENTREZG, Brainarray version 19]
-
-Samples (22)
-Less... Less...           
-GSM3587187	QP-4 Control Vehicle
-GSM3587188	QP-49 Control Vehicle
-GSM3587189	QP-50 Control Vehicle
-GSM3587190	QP-76 Model Vehicle
-GSM3587191	QP-77 Model Vehicle
-GSM3587192	QP-78 Model Vehicle
-GSM3587193	QP-79 Model Vehicle
-GSM3587194	QP-80 Model Vehicle
-GSM3587195	QP-81 Model Vehicle
-GSM3587196	QP-92 Model Vehicle
-GSM3587197	QP-93 Model Vehicle
-GSM3587198	QP-94 Model Vehicle
-GSM3587199	QP-82 Model Nintedanib
-GSM3587200	QP-83 Model Nintedanib
-GSM3587201	QP-84 Model Nintedanib
-GSM3587202	QP-85 Model Nintedanib
-GSM3587203	QP-86 Model Nintedanib
-GSM3587204	QP-87 Model Nintedanib
-GSM3587205	QP-88 Model Nintedanib
-GSM3587206	QP-89 Model Nintedanib
-GSM3587207	QP-90 Model Nintedanib
-GSM3587208	QP-91 Model Nintedanib
-
-```{r}
-gpl21382 <- getGEO('GPL21382')
-Meta(gpl21382)$title
-head(Meta(gpl21382)$series_id)
-length(Meta(gpl21382)$series_id)
-head(Meta(gpl21382)$sample_id)
-length(Meta(gpl21382)$sample_id)
-
-gsmids <- Meta(gpl21382)$sample_id
-gsmlist <- sapply(gsmids[1:5],getGEO)
-names(gsmlist)
-
-citation("GEOquery")
-
-sessionInfo()
-```
-
-**NORMALIZACIÓN**
-
-```{r}
-validObject(gse)
-sampleNames(gse)
-varLabels(gse[[1]])
-
-# GEOquery nos da un ExpressionSet con el cual puede que ya estés normalizados. Boxplots nos muestra su distribución.
-
-boxplot(data.frame(exprs(gse[[1]])),main="gse",outline=FALSE)
-boxplot(GSE125975, col=1:4)
-hist(GSE125975, col=1:4, lty=1)
-
-```
-
-Aunque parecen estar normalizados, registramos valores de intensidades brutas de transformación de log2, para asegurarnos:
-
-```{r}
-exprs(gse[[1]])<-log2(exprs(gse[[1]]))
-boxplot(data.frame(exprs(gse[[1]])),main="gse",outline=FALSE)
-```
-
-```{r}
-write.table(gse, file="matrix.txt", quote=F, sep="\t")
-```
-Read an expression matrix in the form of a tab-delimited text file that you created or downloaded above. The first line contains column headers, and the first row (without a header field) contains gene identifiers.
-
-### 2. Métodos que habéis utilizado en el análisis: Procedimiento general de análisis (pasos, “workflow” o “pipeline” que habéis seguido)
-
-```{r}
-# Extract the expression matrix of sample information using exprs:
-mat <- exprs((gse[[1]]))
-dim(mat)
-
-experimentData(gse[[1]])
-
-```
-
-
-```{r}
-matriz.data <- exprs(gse[[1]])
-head(matriz.data)
-
-
-```
-
-
-
-### 3. Que habéis hecho en cada paso (NO ES PRECISO entrar en el detalle de los métodos,más bien hacer una descripción cualitativa indicando porque se ha llevado a cabo cada paso, y cual ha sido el “input” suministrado al procedimiento y el “output” obtenido.
 
 Es preciso especificar 
 – Cual es el propósito del estudio 
@@ -257,6 +107,564 @@ Métodos de análisis
 – Métodos de clasificación tradicionales (LDA, kNN) y modernos (SVM, PAM) para construir predictores
 – Métodos de análisis basados en la GO (GSEA) para buscar significación biológica
 
+## 3. Materiales y Métodos
+
+### 3. 1. Obtención y lectura de datos (Naturaleza de los datos, tipo de experimento, diseño experimental, tipo de microarrays utilizados,…)
+
+https://www.ncbi.nlm.nih.gov/geo/browse/
+
+El articulo escogido se denomina: *An Immune Gene Expression Signature Associated With Development of Human Hepatocellular Carcinoma Identifies Mice That Respond to Chemopreventive Agents*
+
+https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE125975
+
+**Base de datos**
+
+Se trata de un estudio en el que se analizan los perfiles de expresión génica de tejidos hepáticos no tumorales de 392 pacientes con HCC (carcinoma hepatocelular) en estadio temprano (conjunto de entrenamiento, n = 167 y conjunto de validación, n = 225) y tejido hepático de pacientes con cirrosis sin HCC (n = 216, controles) para identificar cambios en la expresión de genes que regulan la respuesta inmune que podría contribuir a la hepatocarcinogénesis, con Microarrays Affymetrix de expresión genética.
+
+El tipo de microarray es: HT_MG-430_PM (Affymetrix).[CDF: HTMG430PM_Mm_ENTREZG, Brainarray version 19]
+
+La cantidad total de genes que contiene la base de datos es de 13392 genes en 22 muestras.
+
+Los datos de expresión sin procesar de microarrays se normalizaron utilizando el algoritmo robusto de múltiples matrices (Irizarry RA et al, Nucleic Acids Res, 2003) con una definición de conjunto de sonda personalizada que mapeó las sondas a las ID de genes de Entrez (HTMG430PM_Mm_ENTREZG) (Dai M et al, Nucleic Acids Res, 2005).
+
+Una vez pre procesados los datos, obtenemos el objeto exprdata de tipo ExpresionSet.
+Mediante la función varLabels podemos observar como están organizados los datos. A
+continuación mostraremos los más relevantes para la realización de nuestro trabajo:
+
+```{r}
+# Para acceder a GEO Sample (GSM), GEO Series (GSE) (listas de archivos GSM que juntos forman un solo experimento) o GEO Dataset (GDS), empleamos la función getGEO()que devuelve una lista de ExpressionSets
+
+library(GEOquery)
+library(affy)
+gset <- getGEO("GSE125975", GSEMatrix =TRUE, AnnotGPL=FALSE)
+if (length(gset) > 1) idx <- grep("GPL21382", attr(gset, "names")) else idx <- 1
+gset <- gset[[idx]]
+
+# make proper column names to match toptable 
+fvarLabels(gset) <- make.names(fvarLabels(gset))
+
+dim(exprs(gset))
+pheno.data <- pData(gset)
+
+# tambien podemos obtener los datos RAW. descargando los datos directamente de la pagina a nuestra carpeta de trabajo, despues usamos affy pa leer los datos.
+
+celpath <- "./GSE125975_RAW"
+data.raw = ReadAffy(celfile.path=celpath)
+
+# la getGEOSuppFiles() función creará un directorio dentro del directorio de trabajo actual para almacenar los datos sin procesar. Aquí, las rutas de los archivos descargados (a menudo con una extensión .tar) se almacenan en un marco de datos llamado filePaths.
+
+#filePaths = getGEOSuppFiles("GSE125975")
+#filePaths
+
+```
+
+*Para realizar las anotaciones debéis saber con que modelo de array trabajáis. Esta información la encontrareis en el apartado "plattform" en la ficha del estudio Gene Expression Omnibus*
+
+Platforms (1)	
+GPL21382	[HT_MG-430_PM] Affymetrix HT MG-430 PM Array Plate [CDF: HTMG430PM_Mm_ENTREZG, Brainarray version 19]
+
+Samples (22)
+Less... Less...           
+GSM3587187	QP-4 Control Vehicle
+GSM3587188	QP-49 Control Vehicle
+GSM3587189	QP-50 Control Vehicle
+GSM3587190	QP-76 Model Vehicle
+GSM3587191	QP-77 Model Vehicle
+GSM3587192	QP-78 Model Vehicle
+GSM3587193	QP-79 Model Vehicle
+GSM3587194	QP-80 Model Vehicle
+GSM3587195	QP-81 Model Vehicle
+GSM3587196	QP-92 Model Vehicle
+GSM3587197	QP-93 Model Vehicle
+GSM3587198	QP-94 Model Vehicle
+GSM3587199	QP-82 Model Nintedanib
+GSM3587200	QP-83 Model Nintedanib
+GSM3587201	QP-84 Model Nintedanib
+GSM3587202	QP-85 Model Nintedanib
+GSM3587203	QP-86 Model Nintedanib
+GSM3587204	QP-87 Model Nintedanib
+GSM3587205	QP-88 Model Nintedanib
+GSM3587206	QP-89 Model Nintedanib
+GSM3587207	QP-90 Model Nintedanib
+GSM3587208	QP-91 Model Nintedanib
+
+```{r}
+gpl21382 <- getGEO('GPL21382')
+
+Meta(gpl21382)$title
+head(Meta(gpl21382)$series_id)
+length(Meta(gpl21382)$series_id)
+head(Meta(gpl21382)$sample_id)
+length(Meta(gpl21382)$sample_id)
+
+gsmids <- Meta(gpl21382)$sample_id
+gsmlist <- sapply(gsmids[1:5],getGEO)
+names(gsmlist)
+
+citation("GEOquery")
+
+```
+
+#  Exploraci ́on,  Control  de  Calidad  y  Normal-izaci ́on
+## Exploracion
+
+Los representamos:
+
+```{r}
+library(reshape)
+library(ggplot2)
+exprs0 <- exprs(gset)
+df = data.frame(gene = featureNames(gset),exprs0)
+df1 = melt(df,id=c("gene"))
+ggplot(df1,aes(x=value,colour=variable,group=variable)) +
+geom_density(kernel = "epanechnikov",fill=NA) ## Estimadores densidad
+```
+
+Según la imagen anterior, algunas muestras discrepan de la media. Además la forma extraña que vemos en el value = 5, puede indicar un error sistemático.
+
+! Boxplots: otro modo de mostrar la distribución de los niveles de expresión a lo largo de las muestras 
+
+Como vemos, las primeras se desvían de nuevo del comportamiento general:
+
+```{r}
+# Boxplots
+ggplot(df1,aes(x=variable,y = value)) + geom_boxplot() +
+coord_flip()
+```
+
+*PCA*
+
+We then perform a principal component analysis (PCA) and plot it (Figure 2). Every point in the plot represents one sample, with the colour indicating the mucosa type (inflamed vs non-inflamed) and the shape indicating the disease (UC or CD).
+
+```{r}
+pp <- pData(gset)
+exp_raw <- log2(Biobase::exprs(gset))
+PCA_raw <- prcomp(t(exp_raw), scale. = FALSE)
+
+percentVar <- round(100*PCA_raw$sdev^2/sum(PCA_raw$sdev^2),1)
+sd_ratio <- sqrt(percentVar[2] / percentVar[1])
+
+dataGG <- data.frame(PC1 = PCA_raw$x[,1], PC2 = PCA_raw$x[,2],
+Disease = pp$characteristics_ch1,
+Phenotype = pp$`treatment:ch1`,
+Individual = pp$`treatment:ch1`)
+
+ggplot(dataGG, aes(PC1, PC2)) +
+geom_point(aes(shape = Disease, colour = Phenotype)) +
+ggtitle("PCA plot of the log-transformed raw expression data") +
+xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
+ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+theme(plot.title = element_text(hjust = 0.5))+
+coord_fixed(ratio = sd_ratio) +
+scale_shape_manual(values = c(4,15)) + 
+scale_color_manual(values = c("darkorange2", "dodgerblue4"))
+
+```
+
+The PCA plot (Figure 2, performed on the log-intensity scale) of the raw data shows that the first principal component differentiates between the diseases. This means that the disease type is a major driver of gene expression differences. This might hinder our analysis, as we want to analyze the differential expression between inflamed and non-inflamed tissues, independently of the disease a person suffers from.
+
+We also represent the probe intensities via a boxplot graph with one box per individual microarray.
+
+*HIERARCHICAL CLUSTERING ANALYSIS*
+
+Finalmente un cluster jerárquico seguido de un dendrograma nos puede ayudar a hacernos una idea de si las muestras se agrupan por condiciones experimentales
+
+```{r}
+dist.clust <- dist(t(exprs(gset)))
+hclust (dist.clust, "average")
+plot(hclust (dist.clust, "average"))
+
+```
+
+These two graphics are showing us:
+
+1. There are at least two outlier in the data set
+2. The distribution of the intensities in each array (boxplot) illustrates the need of a normalization step.
+
+It is also possible to visualize the image representing each CEL file (in this example, we visualize the first slide of the dataset only). In this way, it is possible to pinpoint technical problems occurring eventually only to one region of the array.
+
+```{r}
+image(exprs(gset))
+```
+
+## Control de calidad
+
+```{r}
+library(arrayQualityMetrics)
+arrayQualityMetrics(data.raw)
+```
+
+```{r}
+library(ggplot2)
+library(ggrepel)
+plotPCA <- function (datos, labels, factor, title, scale,colores, size = 1.5, glineas = 0.25) {
+ data <- prcomp(t(datos),scale=scale)
+ # plot adjustments
+ dataDf <- data.frame(data$x)
+ Group <- factor
+ loads <- round(data$sdev^2/sum(data$sdev^2)*100,1)
+ # main plot
+ p1 <- ggplot(dataDf,aes(x=PC1, y=PC2)) +
+   theme_classic() +
+   geom_hline(yintercept = 0, color = "gray70") +
+   geom_vline(xintercept = 0, color = "gray70") +
+   geom_point(aes(color = Group), alpha = 0.55, size = 3) +
+   coord_cartesian(xlim = c(min(data$x[,1])-5,max(data$x[,1])+5)) +
+   scale_fill_discrete(name = "Group")
+ # avoiding labels superposition
+ p1 + geom_text_repel(aes(y = PC2 + 0.25, label = labels),segment.size = 0.25, size = size) + 
+   labs(x = c(paste("PC1",loads[1],"%")),y=c(paste("PC2",loads[2],"%"))) +  
+   ggtitle(paste("Principal Component Analysis for: ",title,sep=" "))+ 
+   theme(plot.title = element_text(hjust = 0.5)) +
+   scale_color_manual(values=colores)
+}
+
+# lo dibujamos
+
+plotPCA(exprs(data.raw), labels = pp$characteristics_ch1, factor = pp$`treatment:ch1`, 
+      title="Raw data", scale = FALSE, size = 3, 
+      colores = c("red", "blue", "green", "yellow"))
+```
+
+
+
+
+# Normalización
+
+```{r}
+eset_rma <- rma(data.raw)
+```
+
+La normalización supone la corrección de dos o más muestras antes de comparar sus valores
+de expresión. Suele constar de tres pasos:
+! Corrección del fondo (background): Estimar y eliminar la intensidad de ruido de fondo
+! Normalización global o local: Asegurar que la mayoría de las sondas varíen igual
+! Sumarización: Conversión de sondas o conjuntos de sondas a transcritos o genes
+
+Empleamos el Robust Multiarray Analysis: Método para realizar la corrección de fondo, normalización y sumarización en chips de Affymetrix. Tiene una precisión mucho mayor que
+MAS 5.0 (el método de Affymetrix para preprocesar sus chips). Además:
+! Corrección de fondo sin contar MM
+! Normalización por cuantiles
+! Estimación por median polish
+
+```{r}
+plotMDS(gset)
+#library(edgeR)
+#calcNormFactors(gset)
+```
+
+```{r}
+library(limma)
+exprs1 = normalizeBetweenArrays(exprs(gset),method = "quantile")
+head(exprs1)
+# O bien podemos hacer que coincidan las medianas de los distintos arrays con
+exprs2 = normalizeBetweenArrays(exprs(gset),method = "scale")
+head(exprs2)
+
+```
+
+El coodigo siguiente, muestra como se podŕıan aplicar di-tintos  ́etodos parau lego compararlos entre ellos.
+
+```{r}
+library(mas5)
+eset_mas5 <- mas5(ata.raw)  # Uses expresso (MAS 5.0 method) much slower than RMA!
+
+library(gcrma)
+eset_gcrma <- gcrma(rawData) # The'library(gcrma)'needs to be loaded first.
+
+library(plier)
+eset_plier <- justPlier(rawData, normalize=T) # The'library(plier)'needs to be loaded first.
+compara <-data.frame(RMA=exprs(eset_rma)[,1], MAS5 =exprs(eset_mas5)[,1], GCRMA=exprs(eset_gcrma)[,1], PLIER =exprs(eset_plier)[,1])
+pairs(compara)
+
+```
+
+
+# 5. Quality control of Normalized data
+
+```{r}
+arrayQualityMetrics(eset_rma, outdir = file.path(".", "QCraw.Norm"), force=TRUE)
+```
+## PCA y boxplot
+
+```{r}
+plotPCA(exprs(eset_rma), labels = pp$characteristics_ch1, factor = pp$`treatment:ch1`, 
+        title="Normalized data", scale = FALSE, size = 3, 
+        colores = c("red", "blue", "green", "yellow"))
+
+```
+
+Visualización de los dos primeros componentes principales para datos normalizados.
+
+Ahora el primer componente representa el 14.9% de la variabilidad total. El porcentaje de variabilidad explicada ha disminuido con respecto a la PCA realizada en datos sin procesar. Del mismo modo que con el PCA con datos sin procesar, separa las muestras del nivel FRÍO de la condición de temperatura a la derecha, y las muestras del nivel RT a la izquierda. Es importante tener en cuenta que hay una muestra del grupo KO.RT que agrupa cerca de WT.RT y viceversa. Podría ser un problema de etiquetado incorrecto de las muestras que deben verificarse con el laboratorio que ha procesado las muestras.
+
+La figura siguiente figura muestra un diagrama de caja múltiple que representa la distribución de las intensidades normalizadas a lo largo de todas las muestras. Tenga en cuenta que todas las gráficas de caja tienen el mismo aspecto. Esto sugiere que la normalización ha funcionado bien. Sin embargo, es importante tener en cuenta que RMA incluye un paso ("normalización cuantil") donde la distribución empírica de todas las muestras se establece en los mismos valores. Como consecuencia, se espera que los diagramas de caja sean idénticos o al menos muy similares.
+
+```{r}
+# Boxplots
+exprs1 <- exprs(eset_rma)
+df.norm = data.frame(gene = featureNames(eset_rma),exprs1)
+df2 = melt(df.norm,id=c("gene"))
+
+ggplot(df2,aes(x=variable,y = value)) + geom_boxplot() +
+coord_flip()
+```
+
+# 6. Batch detection (quitar?)
+
+Los resultados de microarrays de expresión génica pueden verse afectados por diferencias minúsculas en cualquier número de variables no biológicas como reactivos de diferentes lotes, diferentes técnicos y el problema más habitual es la diferente fecha de procesamiento de las muestras del mismo experimento. El error acumulativo introducido por estas variaciones experimentales dependientes del tiempo y el lugar se conoce como "efectos por lotes". Se han desarrollado diferentes enfoques para identificar y eliminar los efectos por lotes de los datos de microarrays como el análisis de variables sustitutas, el análisis de componentes de variación principal y de combate (PVCA).
+
+Aquí usaremos el último, Análisis de componentes de variación principal, que estima la fuente y la proporción de variación en dos pasos, análisis de componentes principales y análisis de componentes de varianza. Solo con fines ilustrativos, hemos agregado una nueva columna a nuestro archivo de objetivos, con una fecha de procesamiento de muestra ficticia. Realizaremos el análisis PVCA antes y después de agregar estas columnas para ver las diferencias:
+
+
+```{r}
+#load the library
+#BiocManager::install("pvca")
+library(pvca)
+#select the threshold
+pct_threshold <- 0.6
+#select the factors to analyze
+batch.factors <- c("characteristics_ch1", "characteristics_ch1.1")
+#run the analysis
+pvcaObj <- pvcaBatchAssess (gset, batch.factors, pct_threshold)
+
+# Figure @ref(fig:plotPVCA) shows a bar diagram with one bar per each source of variation included in the analysis. Their relative size indicates the percentage of variability attributable to each source. The plot shows that the main source of variation in the samples is the Temperature condition. This was also observed on the PCA plots on raw and normalized data in figures @ref(fig:PCARaw) and @ref(fig:PCANorm).
+
+#plot the results
+bp <- barplot(pvcaObj$dat, xlab = "Effects",
+ ylab = "Weighted average proportion variance",
+ ylim= c(0,1.1),col = c("mediumorchid"), las=2,
+ main="PVCA estimation")
+axis(1, at = bp, labels = pvcaObj$label, cex.axis = 0.55, las=2)
+values = pvcaObj$dat
+new_values = round(values , 3)
+text(bp,pvcaObj$dat,labels = new_values, pos=3, cex = 0.5)
+```
+
+Importancia relativa de los diferentes factores -genotipo, temperatura e interacción- que afectan la expresión génica
+
+# 7. Detecting most variable genes
+
+La selección de genes expresados diferencialmente se ve afectada por la cantidad de genes en los que la hacemos. Cuanto mayor sea el número, mayor será el ajuste necesario de los valores de p (como se verá a continuación), lo que nos llevará a terminar abortando más genes.
+
+Si un gen se expresa de manera diferencial, se espera que haya una cierta diferencia entre los grupos y, por lo tanto, la varianza general del gen será mayor que la de aquellos que no tienen expresión diferencial. Trazar la variabilidad general de todos los genes es útil para decidir qué porcentaje de genes muestra una variabilidad que puede atribuirse a otras causas que no sean la variación aleatoria. La figura @ref (fig: SDplot) representa las desviaciones estándar de todos los genes ordenados de menor a mayor valor. El gráfico muestra que los genes más variables son aquellos con una desviación estándar superior al 90-95% de todas las desviaciones estándar.
+
+```{r}
+sds <- apply (exprs(eset_rma), 1, sd)
+sdsO<- sort(sds)
+plot(1:length(sdsO), sdsO, main="Distribution of variability for all genes",
+    sub="Vertical lines represent 90% and 95% percentiles",
+    xlab="Gene index (from least to most variable)", ylab="Standard deviation")
+abline(v=length(sds)*c(0.9,0.95))
+```
+
+*Selección de genes expresados de forma diferencial*
+
+```{r}
+experiment.design <- exprs(gset)
+colnames(experiment.design) <- sampleNames(gset)
+
+fit <- lmFit(expression.level, experiment.design)
+expression.level <- exprs(microarray.data)
+microarray.data <- rma(gset_raw)
+
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("htmg430pmcdf")
+library(htmg430pmcdf)
+```
+
+# 8. Filtering least variable genes
+
+Filtrar aquellos genes cuya variabilidad se puede atribuir a la variación aleatoria, es decir, los genes que, razonablemente, no se espera que expresen diferencialmente, ha demostrado ser útil para reducir el número de pruebas que se realizarán con el aumento correspondiente en la potencia de Hackstadt y Hess (2009).
+
+La función nsFilter del paquete de bioconductores genefilter se puede utilizar para eliminar genes en función de un umbral de variabilidad. Si hay disponible un paquete de anotaciones -asociando identificadores de conjuntos de sondas e identificadores de genes de diferentes bases de datos-, también puede usarse para eliminar conjuntos de sondas que no tienen un identificador de gen asociado.
+
+```{r}
+require("htmg430pm.db")
+htmg430pmcdf::htmg430pmdim
+
+
+# NO SALE
+
+library(genefilter)
+library(htmg430pm)
+
+annotation(eset_rma) <- "htmg430pm"
+filtered <- nsFilter(eset_rma, require.entrez = TRUE, remove.dupEntrez = TRUE,
+                    var.filter=TRUE, var.func=IQR, var.cutoff=0.75, 
+                    filterByQuantile=TRUE, feature.exclude = "^AFFX")
+
+# Function nsFilter returns the filtered values and a report of the filtering results.
+
+print(filtered$filter.log)
+```
+
+Después de filtrar, quedan 5994 genes. Tenga en cuenta que hemos almacenado los genes que quedan en la variable eset_filtered
+
+# 9.  Saving normalized and filtered data
+
+Los datos filtrados normalizados son el punto de partida para futuros análisis, pero es posible que deseemos volver a ellos, por ejemplo, para revisar valores de expresión génica específicos. Es habitual guardar los objetos binarios, pero también escribir valores de expresión en archivos de texto o Excel. Escribir en Excel desde R no es una tarea trivial, por extraño que parezca, porque los diferentes paquetes funcionan de manera diferente según el sistema operativo, por lo que se omite del código.
+
+```{r}
+dir.create("./results")
+write.csv(exprs(eset_rma), file="./results/normalized.Data.csv")
+write.csv(exprs(eset_filtered), file="./results/normalized.Filtered.Data.csv")
+save(eset_rma, eset_filtered, file="./results/normalized.Data.Rda")
+```
+
+# 10. Defining the experimental setup: The design matrix
+
+El primer paso para el análisis basado en modelos lineales es crear la matriz de diseño. Básicamente es una tabla que describe la asignación de cada muestra a un grupo o condición experimental. Tiene tantas filas como muestras y tantas columnas como grupos (si solo se considera un factor). Cada fila contiene un uno en la columna del grupo al que pertenece la muestra y un cero en los demás.
+
+La matriz de diseño se puede definir manualmente o a partir de una variable de factor que puede haberse introducido en el archivo "objetivos" con este objetivo creado específicamente para ella. En este estudio, la variable "Grupo" es una combinación de las dos condiciones experimentales, "KO / Wild" y "RT / COLD", que se representan conjuntamente como un factor con 4 niveles.
+
+```{r}
+# if (!exists("eset_filtered")) load (file="./results/normalized.Data.Rda")
+
+library(limma)
+designMat<- model.matrix(~0+Group, pData(eset_filtered))
+colnames(designMat) <- c("KO.COLD", "KO.RT", "WT.COLD", "WT.RT")
+print(designMat)
+```
+
+# 11. Defining comparisons with the Contrasts Matrix
+
+```{r}
+cont.matrix <- makeContrasts (KOvsWT.COLD = KO.COLD-WT.COLD,
+                             KOvsWT.RT = KO.RT-WT.RT,
+                             INT = (KO.COLD-WT.COLD) - (KO.RT-WT.RT),
+                             levels=designMat)
+print(cont.matrix)
+```
+
+# 12. Model estimation and gene selection
+
+```{r}
+library(limma)
+fit<-lmFit(eset_filtered, designMat)
+fit.main<-contrasts.fit(fit, cont.matrix)
+fit.main<-eBayes(fit.main)
+class(fit.main)
+```
+
+# 13. Obtaining lists of differentially expressed genes
+```{r}
+#The limma package implements function topTable which contains, for a given contrast a list of genes ordered from smallest to biggest p–value which can be considered to be most to least differential expressed. For each gene the following statistics are provided:
+
+  #  logFC: Mean difference between groups.
+  #  AveExpr: Average expression of all genes in the comparison.
+  #  t : Moderated t-statistic (t-test-like statistic for the comparison).
+  #  P.Value: Test p–value.
+  #  adj.P.Val: Adjusted p–value following Benjamini and Hochberg (1995)
+  #  B: B-statistic: Posterior log odds of the gene of being vs non being differential expressed.
+
+# We can have a look at the first lines of each topTable.
+
+# For comparison 1 (KOvsWT.COLD): Genes that change their expression between KO and WT in cold temperature:
+
+topTab_KOvsWT.COLD <- topTable (fit.main, number=nrow(fit.main), coef="KOvsWT.COLD", adjust="fdr") 
+head(topTab_KOvsWT.COLD)
+
+topTab_KOvsWT.RT <- topTable (fit.main, number=nrow(fit.main), coef="KOvsWT.RT", adjust="fdr") 
+head(topTab_KOvsWT.RT)
+
+# For comparison 3 (INT): Genes that behave differently between comparison 1 and 2:
+
+topTab_INT  <- topTable (fit.main, number=nrow(fit.main), coef="INT", adjust="fdr") 
+head(topTab_INT)
+```
+
+# 14. Gene Annotation
+```{r}
+# Once we have the top table it is useful to provide additional information on the features that have been selected. This process is called “annotation” and essentially what it does is to look for information to associate identifiers that appear in the top table, usually corresponding to probesets or transcripts depending of the array type, with more familiar names such as the Gene Symbol, the Entrez Gene identifier or the Gene description.
+
+# For simplicity, because there are three toptables, a function annotating one topTable with a given package is prepared and used.
+
+annotatedTopTable <- function(topTab, anotPackage)
+{
+ topTab <- cbind(PROBEID=rownames(topTab), topTab)
+ myProbes <- rownames(topTab)
+ thePackage <- eval(parse(text = anotPackage))
+ geneAnots <- select(thePackage, myProbes, c("SYMBOL", "ENTREZID", "GENENAME"))
+ annotatedTopTab<- merge(x=geneAnots, y=topTab, by.x="PROBEID", by.y="PROBEID")
+return(annotatedTopTab)
+}
+
+topAnnotated_KOvsWT.COLD <- annotatedTopTable(topTab_KOvsWT.COLD,
+anotPackage="mogene21sttranscriptcluster.db")
+topAnnotated_KOvsWT.RT <- annotatedTopTable(topTab_KOvsWT.RT,
+anotPackage="mogene21sttranscriptcluster.db")
+topAnnotated_INT <- annotatedTopTable(topTab_INT,
+anotPackage="mogene21sttranscriptcluster.db")
+write.csv(topAnnotated_KOvsWT.COLD, file="./results/topAnnotated_KOvsWT_COLD.csv")
+write.csv(topAnnotated_KOvsWT.RT, file="./results/topAnnotated_KOvsWT_RT.csv")
+write.csv(topAnnotated_INT, file="./results/topAnnotated_INT.csv")
+```
+
+# 15. Visualizing differential expression: VOlcano plot
+
+```{r}
+library(mogene21sttranscriptcluster.db)
+geneSymbols <- select(mogene21sttranscriptcluster.db, rownames(fit.main), c("SYMBOL"))
+SYMBOLS<- geneSymbols$SYMBOL
+volcanoplot(fit.main, coef=1, highlight=4, names=SYMBOLS, 
+           main=paste("Differentially expressed genes", colnames(cont.matrix)[1], sep="\n"))
+abline(v=c(-1,1))
+```
+
+*ANÁLISIS DE DATOS*
+
+Una vez preprocesados, tenemos dos tipos de análisis sobre datos de microarrays
+! Estadística inferencial: determinar qué genes están expresados diferencialmente (DEGs) y si dicha expresión es significativa
+! Estadística descriptiva: determinar grupos de genes que presentan patrones similares con PCA y cluster.
+
+*Estadística inferencial: T-TEST*
+*vOLCANOS PLOT*
+
+Todos estos modelos, al igual que el test-t, nos darán un pvalor para la significatividad de la expresión genética en cada contraste de condiciones 
+
+```{r}
+## Compute RMA expression values
+esetRMA = rma(rawdata)
+
+## Compare distributions of probes/probesets before/after
+pdf("boxplotProbes.pdf")
+boxplot(rawdata)
+dev.off()
+pdf("boxplotRMA.pdf")
+boxplot(exprs(esetRMA))
+dev.off()
+```
+
+
+# 16. Multiple comparisons
+
+# 17. Heatmaps
+
+# 18. Biological Significance of results
+
+Una vez que se obtiene una lista de genes que caracteriza la diferencia entre dos condiciones, debe interpretarse. Aunque esto requiere, por supuesto, una buena comprensión del problema biológico subyacente, un enfoque estadístico conocido como "Análisis de conjunto de genes" puede ser útil para sugerir ideas para la interpretación.
+
+Con este objetivo, estos tipos de análisis buscan establecer si, dada una lista de genes seleccionados por ser diferencial expresada entre dos condiciones, las funciones, procesos biológicos o vías moleculares que los caracterizan aparecen en esta lista con más frecuencia que entre el resto de los genes analizado.
+
+Hay muchas variantes de estos tipos de análisis, ver Khatri, Sirota y Butte (2012), pero aquí usaremos el análisis de enriquecimiento básico como se describe en implementado en el paquete ReactomePA Bioconductor. El análisis se realiza en la base de datos de anotaciones ReactomePA https://reactome.org/.
+
+Los análisis de este tipo necesitan un número mínimo de genes para ser confiables, preferiblemente unos pocos cientos que unas pocas docenas, por lo que es común realizar una selección menos restrictiva que con los pasos anteriores. Por ejemplo, una opción es incluir todos los genes con un límite de FDR no estricto, como FDR <0.15 sin filtrado por "cambio de pliegue" mínimo).
+
+Como primer paso, preparamos la lista de listas de genes que se analizarán:
+
+
+# 19. Resumen de resultados
+
+Una vez que el proceso se ha completado, se obtiene una lista de archivos, a veces larga, con los datos y los resultados del análisis. Estos archivos son la base para discutir los resultados y buscar una interpretación biológica. Ambos aspectos exceden los objetivos de este capítulo, por lo que se omiten aquí.
+
+Es útil crear un archivo con el tipo, nombre y descripción de todos los archivos generados a lo largo del análisis. La tabla @ref (tab: listOfFiles) muestra la lista de archivos generados en el estudio de caso actual.
+
+
+### 3. Que habéis hecho en cada paso (NO ES PRECISO entrar en el detalle de los métodos,más bien hacer una descripción cualitativa indicando porque se ha llevado a cabo cada paso, y cual ha sido el “input” suministrado al procedimiento y el “output” obtenido.
+
 ## 4. Resultados
 Que se obtiene como resultado del análisis
 
@@ -270,6 +678,81 @@ Como bioinformáticos se os presupondrá la capacidad de manejar la información
 ## 7. Apéndice: 
 Podéis poner el código de R que hayáis utilizado en un apéndice con comentarios.
 
+```{r}
+
+# Para acceder a GEO Sample (GSM), GEO Series (GSE) (listas de archivos GSM que juntos forman un solo experimento) o GEO Dataset (GDS), empleamos la función getGEO()que devuelve una lista de ExpressionSets
+
+#   Differential expression analysis with limma
+library(Biobase)
+library(GEOquery)
+library(limma)
+
+# load series and platform data from GEO
+
+gset <- getGEO("GSE125975", GSEMatrix =TRUE, AnnotGPL=FALSE)
+if (length(gset) > 1) idx <- grep("GPL21382", attr(gset, "names")) else idx <- 1
+gset <- gset[[idx]]
+
+# make proper column names to match toptable 
+fvarLabels(gset) <- make.names(fvarLabels(gset))
+
+# group names for all samples
+gsms <- "0000000000001111111111"
+sml <- c()
+for (i in 1:nchar(gsms)) { sml[i] <- substr(gsms,i,i) }
+
+# log2 transform
+exprs(gset) <- log2(exprs(gset))
+
+# set up the data and proceed with analysis
+sml <- paste("G", sml, sep="")    # set group names
+fl <- as.factor(sml)
+gset$description <- fl
+design <- model.matrix(~ description + 0, gset)
+colnames(design) <- levels(fl)
+fit <- lmFit(gset, design)
+cont.matrix <- makeContrasts(G1-G0, levels=design)
+fit2 <- contrasts.fit(fit, cont.matrix)
+fit2 <- eBayes(fit2, 0.01)
+tT <- topTable(fit2, adjust="fdr", sort.by="B", number=250)
+
+tT <- subset(tT, select=c("ID","adj.P.Val","P.Value","t","B","logFC","SPOT_ID"))
+write.table(tT, file=stdout(), row.names=F, sep="\t")
+write.csv(tT, file= "./results/data_analisys.csv", sep = ",")
 
 
+################################################################
+#   Boxplot for selected GEO samples
+library(Biobase)
+library(GEOquery)
 
+# load series and platform data from GEO
+
+gset <- getGEO("GSE125975", GSEMatrix =TRUE, getGPL=FALSE)
+if (length(gset) > 1) idx <- grep("GPL21382", attr(gset, "names")) else idx <- 1
+gset <- gset[[idx]]
+
+# group names for all samples in a series
+gsms <- "0000000000001111111111"
+sml <- c()
+for (i in 1:nchar(gsms)) { sml[i] <- substr(gsms,i,i) }
+sml <- paste("G", sml, sep="")  # set group names
+
+# order samples by group
+ex <- exprs(gset)[ , order(sml)]
+sml <- sml[order(sml)]
+fl <- as.factor(sml)
+labels <- c("Treat1_vehicle","Treat2_nintedanib")
+
+# set parameters and draw the plot
+palette(c("#f2cb98","#f4dfdf", "#AABBCC"))
+dev.new(width=4+dim(gset)[[2]]/5, height=6)
+par(mar=c(2+round(max(nchar(sampleNames(gset)))/2),4,2,1))
+title <- paste ("GSE125975", '/', annotation(gset), " selected samples", sep ='')
+
+boxplot(ex, boxwex=0.6, notch=T, main=title, outline=FALSE, las=2, col=fl)
+legend("topleft", labels, fill=palette(), bty="n")
+
+```
+
+<div/>
