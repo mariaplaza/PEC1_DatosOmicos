@@ -22,11 +22,13 @@ if (!requireNamespace("BiocManager", quietly = TRUE))
 BiocManager::install(version = "3.10")
 Bioconductor version 3.10 (BiocManager 1.30.10), ?BiocManager::install for help
 #Para instalar los paquetes específicos:
-BiocManager :: install (c ("Biobase", "methods", "affy"))
-BiocManager::install("GEOquery")
-BiocManager::install("Simpleaffy")
-BiocManager::install("arrayQualityMetrics")
-BiocManager::install("biocLite")
+BiocManager :: install (c ("Biobase", "methods", "affy", "GEOquery", "simpleaffy", "arrayQualityMetrics","biocLite" ))
+BiocManager :: install("pvca")
+BiocManager :: install("genefilter")
+BiocManager :: install("mas5")
+BiocManager :: install("gcrma")
+BiocManager :: install("plier")
+BiocManager :: install("genefilter")
 ```
 
 # Análisis de Microarrays
@@ -107,6 +109,38 @@ Métodos de análisis
 – Métodos de clasificación tradicionales (LDA, kNN) y modernos (SVM, PAM) para construir predictores
 – Métodos de análisis basados en la GO (GSEA) para buscar significación biológica
 
+Microarray Data analysis workflow
+o Image analysis
+o Raw data
+o Diagnostic plots
+o Normalization
+o Filtering
+o Estimate missing
+values
+o Differential gene
+inference
+! Linear modeling and
+factorial experiment
+o Clustering
+o Classification
+o Annotation
+o GO analysis
+o Pathway analysis
+
+ *What’s Your Question?*
+What are the targets genes for my knock-out gene?
+Gene discovery, differential expression 
+
+Is a specified group of genes (genes from a pathway) all up-regulated in a specified condition?
+Gene set enrichment analysis 
+
+Can I use the expression profile of cancer patients to predict chemotherapy outcome?
+Class prediction, classification
+
+Pathways/network affected?
+Kegg, Biocarta
+Considering Pathway/network Topology 
+
 ## 3. Materiales y Métodos
 
 ### 3. 1. Obtención y lectura de datos (Naturaleza de los datos, tipo de experimento, diseño experimental, tipo de microarrays utilizados,…)
@@ -128,8 +162,6 @@ La cantidad total de genes que contiene la base de datos es de 13392 genes en 22
 Los datos de expresión sin procesar de microarrays se normalizaron utilizando el algoritmo robusto de múltiples matrices (Irizarry RA et al, Nucleic Acids Res, 2003) con una definición de conjunto de sonda personalizada que mapeó las sondas a las ID de genes de Entrez (HTMG430PM_Mm_ENTREZG) (Dai M et al, Nucleic Acids Res, 2005).
 
 Una vez pre procesados los datos, obtenemos el objeto exprdata de tipo ExpresionSet.
-Mediante la función varLabels podemos observar como están organizados los datos. A
-continuación mostraremos los más relevantes para la realización de nuestro trabajo:
 
 ```{r}
 # Para acceder a GEO Sample (GSM), GEO Series (GSE) (listas de archivos GSM que juntos forman un solo experimento) o GEO Dataset (GDS), empleamos la función getGEO()que devuelve una lista de ExpressionSets
@@ -158,7 +190,7 @@ data.raw = ReadAffy(celfile.path=celpath)
 
 ```
 
-*Para realizar las anotaciones debéis saber con que modelo de array trabajáis. Esta información la encontrareis en el apartado "plattform" en la ficha del estudio Gene Expression Omnibus*
+Los datos concretos con los que vamos a trabajar los observamos en la siguiente tabla:
 
 Platforms (1)	
 GPL21382	[HT_MG-430_PM] Affymetrix HT MG-430 PM Array Plate [CDF: HTMG430PM_Mm_ENTREZG, Brainarray version 19]
@@ -205,10 +237,13 @@ citation("GEOquery")
 
 ```
 
-#  Exploraci ́on,  Control  de  Calidad  y  Normal-izaci ́on
-## Exploracion
+### 3. Que habéis hecho en cada paso (NO ES PRECISO entrar en el detalle de los métodos,más bien hacer una descripción cualitativa indicando porque se ha llevado a cabo cada paso, y cual ha sido el “input” suministrado al procedimiento y el “output” obtenido.
 
-Los representamos:
+## Exploración
+
+En primer lugar debemos hacer una exploración de los datos con los que trabajamos. Para ello los representamos en varios tipos de graficos. 
+
+*HISTOGRAM*
 
 ```{r}
 library(reshape)
@@ -220,50 +255,17 @@ ggplot(df1,aes(x=value,colour=variable,group=variable)) +
 geom_density(kernel = "epanechnikov",fill=NA) ## Estimadores densidad
 ```
 
-Según la imagen anterior, algunas muestras discrepan de la media. Además la forma extraña que vemos en el value = 5, puede indicar un error sistemático.
+Según la imagen anterior, algunas muestras discrepan de la media. Además la forma extraña que vemos a la derecha, en el value = 5, puede indicar un error sistemático.
 
-! Boxplots: otro modo de mostrar la distribución de los niveles de expresión a lo largo de las muestras 
+*BOXPLOTS*
 
-Como vemos, las primeras se desvían de nuevo del comportamiento general:
+Podemos ademas representar las muestras en diagramas de cajas o Boxplots, mostrando la distribución de los niveles de expresión a lo largo de las muestras.
+Como vemos, hay algunas que se desvían del comportamiento general:
 
 ```{r}
-# Boxplots
 ggplot(df1,aes(x=variable,y = value)) + geom_boxplot() +
 coord_flip()
 ```
-
-*PCA*
-
-We then perform a principal component analysis (PCA) and plot it (Figure 2). Every point in the plot represents one sample, with the colour indicating the mucosa type (inflamed vs non-inflamed) and the shape indicating the disease (UC or CD).
-
-```{r}
-pp <- pData(gset)
-exp_raw <- log2(Biobase::exprs(gset))
-PCA_raw <- prcomp(t(exp_raw), scale. = FALSE)
-
-percentVar <- round(100*PCA_raw$sdev^2/sum(PCA_raw$sdev^2),1)
-sd_ratio <- sqrt(percentVar[2] / percentVar[1])
-
-dataGG <- data.frame(PC1 = PCA_raw$x[,1], PC2 = PCA_raw$x[,2],
-Disease = pp$characteristics_ch1,
-Phenotype = pp$`treatment:ch1`,
-Individual = pp$`treatment:ch1`)
-
-ggplot(dataGG, aes(PC1, PC2)) +
-geom_point(aes(shape = Disease, colour = Phenotype)) +
-ggtitle("PCA plot of the log-transformed raw expression data") +
-xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
-theme(plot.title = element_text(hjust = 0.5))+
-coord_fixed(ratio = sd_ratio) +
-scale_shape_manual(values = c(4,15)) + 
-scale_color_manual(values = c("darkorange2", "dodgerblue4"))
-
-```
-
-The PCA plot (Figure 2, performed on the log-intensity scale) of the raw data shows that the first principal component differentiates between the diseases. This means that the disease type is a major driver of gene expression differences. This might hinder our analysis, as we want to analyze the differential expression between inflamed and non-inflamed tissues, independently of the disease a person suffers from.
-
-We also represent the probe intensities via a boxplot graph with one box per individual microarray.
 
 *HIERARCHICAL CLUSTERING ANALYSIS*
 
@@ -276,12 +278,12 @@ plot(hclust (dist.clust, "average"))
 
 ```
 
-These two graphics are showing us:
+Estos gráficos nos has mostrado:
 
-1. There are at least two outlier in the data set
-2. The distribution of the intensities in each array (boxplot) illustrates the need of a normalization step.
+1. Hay al menos dos valores atípicos en el conjunto de datos
+2. La distribución de las intensidades en cada matriz (boxplots) ilustra la necesidad de un paso de normalización.
 
-It is also possible to visualize the image representing each CEL file (in this example, we visualize the first slide of the dataset only). In this way, it is possible to pinpoint technical problems occurring eventually only to one region of the array.
+También es posible visualizar la imagen que representa cada archivo CEL (en este ejemplo, visualizamos solo la primera diapositiva del conjunto de datos). De esta manera, es posible identificar problemas técnicos que ocurren eventualmente solo en una región de la matriz.
 
 ```{r}
 image(exprs(gset))
@@ -289,14 +291,20 @@ image(exprs(gset))
 
 ## Control de calidad
 
+La funcion *arrayQualityMetrics* produce un informe de métricas de calidad de nuestra matriz de datos, que guardamos dentro de nuestra carpeta de resultados:
+
 ```{r}
 library(arrayQualityMetrics)
-arrayQualityMetrics(data.raw)
+arrayQualityMetrics(data.raw, outdir = file.path("./results", "reportquality_dataRAW"))
 ```
+
+y vemos los datos en un grafico PCA:
 
 ```{r}
 library(ggplot2)
 library(ggrepel)
+
+# Creamos la funci'on necesaria
 plotPCA <- function (datos, labels, factor, title, scale,colores, size = 1.5, glineas = 0.25) {
  data <- prcomp(t(datos),scale=scale)
  # plot adjustments
@@ -320,88 +328,74 @@ plotPCA <- function (datos, labels, factor, title, scale,colores, size = 1.5, gl
 }
 
 # lo dibujamos
-
-plotPCA(exprs(data.raw), labels = pp$characteristics_ch1, factor = pp$`treatment:ch1`, 
+plotPCA(exprs(data.raw), labels = pheno.data$characteristics_ch1, factor = pheno.data$`treatment:ch1`, 
       title="Raw data", scale = FALSE, size = 3, 
       colores = c("red", "blue", "green", "yellow"))
 ```
 
+## Normalización
 
-
-
-# Normalización
-
-```{r}
-eset_rma <- rma(data.raw)
-```
-
-La normalización supone la corrección de dos o más muestras antes de comparar sus valores
-de expresión. Suele constar de tres pasos:
+La normalización supone la corrección de dos o más muestras antes de comparar sus valores de expresión. Suele constar de tres pasos:
 ! Corrección del fondo (background): Estimar y eliminar la intensidad de ruido de fondo
 ! Normalización global o local: Asegurar que la mayoría de las sondas varíen igual
 ! Sumarización: Conversión de sondas o conjuntos de sondas a transcritos o genes
 
-Empleamos el Robust Multiarray Analysis: Método para realizar la corrección de fondo, normalización y sumarización en chips de Affymetrix. Tiene una precisión mucho mayor que
-MAS 5.0 (el método de Affymetrix para preprocesar sus chips). Además:
+Empleamos el Robust Multiarray Analysis: Método para realizar la corrección de fondo, normalización y sumarización en chips de Affymetrix. Tiene una precisión mucho mayor que MAS 5.0 (el método de Affymetrix para preprocesar sus chips). Además:
 ! Corrección de fondo sin contar MM
 ! Normalización por cuantiles
 ! Estimación por median polish
 
 ```{r}
-plotMDS(gset)
-#library(edgeR)
-#calcNormFactors(gset)
+eset_rma <- rma(data.raw)
+```
+
+Vemos la normalizaci'on con otro tipo de funciones:
+
+```{r}
+library(limma)
+library(edgeR)
+
+plotMDS(gset) #Esta funci'on grafica las muestras en un diagrama de dispersión bidimensional para que las distancias en el gráfico se aproximen a los cambios típicos de pliegue log2 entre las muestras.
+
+calcNormFactors(gset) #Calcula los factores de normalización para escalar los datos.
 ```
 
 ```{r}
 library(limma)
-exprs1 = normalizeBetweenArrays(exprs(gset),method = "quantile")
+# La siguiente funcion normaliza las intensidades de expresión para que las intensidades o las proporciones logarítmicas tengan distribuciones similares en un conjunto de matrices
+exprs1 = normalizeBetweenArrays(exprs(gset),method = "quantile") 
 head(exprs1)
+
 # O bien podemos hacer que coincidan las medianas de los distintos arrays con
 exprs2 = normalizeBetweenArrays(exprs(gset),method = "scale")
 head(exprs2)
 
 ```
 
-El coodigo siguiente, muestra como se podŕıan aplicar di-tintos  ́etodos parau lego compararlos entre ellos.
+## Control de calidad de datos normalizados
+
+Empleamos de nuevo la funcion *arrayQualityMetrics* para producir un informe de métricas para combrobar la calidad de la matriz normalizada y guardamos la tabla creada en la carpeta de resultados.
 
 ```{r}
-library(mas5)
-eset_mas5 <- mas5(ata.raw)  # Uses expresso (MAS 5.0 method) much slower than RMA!
-
-library(gcrma)
-eset_gcrma <- gcrma(rawData) # The'library(gcrma)'needs to be loaded first.
-
-library(plier)
-eset_plier <- justPlier(rawData, normalize=T) # The'library(plier)'needs to be loaded first.
-compara <-data.frame(RMA=exprs(eset_rma)[,1], MAS5 =exprs(eset_mas5)[,1], GCRMA=exprs(eset_gcrma)[,1], PLIER =exprs(eset_plier)[,1])
-pairs(compara)
-
+arrayQualityMetrics(eset_rma, outdir = file.path("./results", "QCraw.Norm"), force=TRUE)
 ```
 
+*PCA y boxplot*
 
-# 5. Quality control of Normalized data
-
-```{r}
-arrayQualityMetrics(eset_rma, outdir = file.path(".", "QCraw.Norm"), force=TRUE)
-```
-## PCA y boxplot
+Visualización de los dos primeros componentes principales para datos normalizados.
 
 ```{r}
-plotPCA(exprs(eset_rma), labels = pp$characteristics_ch1, factor = pp$`treatment:ch1`, 
+plotPCA(exprs(eset_rma), labels = pheno.data$characteristics_ch1, factor = pheno.data$`treatment:ch1`, 
         title="Normalized data", scale = FALSE, size = 3, 
         colores = c("red", "blue", "green", "yellow"))
 
 ```
-
-Visualización de los dos primeros componentes principales para datos normalizados.
 
 Ahora el primer componente representa el 14.9% de la variabilidad total. El porcentaje de variabilidad explicada ha disminuido con respecto a la PCA realizada en datos sin procesar. Del mismo modo que con el PCA con datos sin procesar, separa las muestras del nivel FRÍO de la condición de temperatura a la derecha, y las muestras del nivel RT a la izquierda. Es importante tener en cuenta que hay una muestra del grupo KO.RT que agrupa cerca de WT.RT y viceversa. Podría ser un problema de etiquetado incorrecto de las muestras que deben verificarse con el laboratorio que ha procesado las muestras.
 
 La figura siguiente figura muestra un diagrama de caja múltiple que representa la distribución de las intensidades normalizadas a lo largo de todas las muestras. Tenga en cuenta que todas las gráficas de caja tienen el mismo aspecto. Esto sugiere que la normalización ha funcionado bien. Sin embargo, es importante tener en cuenta que RMA incluye un paso ("normalización cuantil") donde la distribución empírica de todas las muestras se establece en los mismos valores. Como consecuencia, se espera que los diagramas de caja sean idénticos o al menos muy similares.
 
 ```{r}
-# Boxplots
 exprs1 <- exprs(eset_rma)
 df.norm = data.frame(gene = featureNames(eset_rma),exprs1)
 df2 = melt(df.norm,id=c("gene"))
@@ -410,44 +404,18 @@ ggplot(df2,aes(x=variable,y = value)) + geom_boxplot() +
 coord_flip()
 ```
 
-# 6. Batch detection (quitar?)
-
-Los resultados de microarrays de expresión génica pueden verse afectados por diferencias minúsculas en cualquier número de variables no biológicas como reactivos de diferentes lotes, diferentes técnicos y el problema más habitual es la diferente fecha de procesamiento de las muestras del mismo experimento. El error acumulativo introducido por estas variaciones experimentales dependientes del tiempo y el lugar se conoce como "efectos por lotes". Se han desarrollado diferentes enfoques para identificar y eliminar los efectos por lotes de los datos de microarrays como el análisis de variables sustitutas, el análisis de componentes de variación principal y de combate (PVCA).
-
-Aquí usaremos el último, Análisis de componentes de variación principal, que estima la fuente y la proporción de variación en dos pasos, análisis de componentes principales y análisis de componentes de varianza. Solo con fines ilustrativos, hemos agregado una nueva columna a nuestro archivo de objetivos, con una fecha de procesamiento de muestra ficticia. Realizaremos el análisis PVCA antes y después de agregar estas columnas para ver las diferencias:
-
-
 ```{r}
-#load the library
-#BiocManager::install("pvca")
-library(pvca)
-#select the threshold
-pct_threshold <- 0.6
-#select the factors to analyze
-batch.factors <- c("characteristics_ch1", "characteristics_ch1.1")
-#run the analysis
-pvcaObj <- pvcaBatchAssess (gset, batch.factors, pct_threshold)
-
-# Figure @ref(fig:plotPVCA) shows a bar diagram with one bar per each source of variation included in the analysis. Their relative size indicates the percentage of variability attributable to each source. The plot shows that the main source of variation in the samples is the Temperature condition. This was also observed on the PCA plots on raw and normalized data in figures @ref(fig:PCARaw) and @ref(fig:PCANorm).
-
-#plot the results
-bp <- barplot(pvcaObj$dat, xlab = "Effects",
- ylab = "Weighted average proportion variance",
- ylim= c(0,1.1),col = c("mediumorchid"), las=2,
- main="PVCA estimation")
-axis(1, at = bp, labels = pvcaObj$label, cex.axis = 0.55, las=2)
-values = pvcaObj$dat
-new_values = round(values , 3)
-text(bp,pvcaObj$dat,labels = new_values, pos=3, cex = 0.5)
+#heatmap
+rsd <- apply(exprs(eset_rma), 1, sd)
+sel <- order(rsd, decreasing = TRUE)[1:50]
+heatmap(exprs(eset_rma)[sel, ])  
 ```
 
-Importancia relativa de los diferentes factores -genotipo, temperatura e interacción- que afectan la expresión génica
-
-# 7. Detecting most variable genes
+## Detectar genes más variables
 
 La selección de genes expresados diferencialmente se ve afectada por la cantidad de genes en los que la hacemos. Cuanto mayor sea el número, mayor será el ajuste necesario de los valores de p (como se verá a continuación), lo que nos llevará a terminar abortando más genes.
 
-Si un gen se expresa de manera diferencial, se espera que haya una cierta diferencia entre los grupos y, por lo tanto, la varianza general del gen será mayor que la de aquellos que no tienen expresión diferencial. Trazar la variabilidad general de todos los genes es útil para decidir qué porcentaje de genes muestra una variabilidad que puede atribuirse a otras causas que no sean la variación aleatoria. La figura @ref (fig: SDplot) representa las desviaciones estándar de todos los genes ordenados de menor a mayor valor. El gráfico muestra que los genes más variables son aquellos con una desviación estándar superior al 90-95% de todas las desviaciones estándar.
+Si un gen se expresa de manera diferencial, se espera que haya una cierta diferencia entre los grupos y, por lo tanto, la varianza general del gen será mayor que la de aquellos que no tienen expresión diferencial. Trazar la variabilidad general de todos los genes es útil para decidir qué porcentaje de genes muestra una variabilidad que puede atribuirse a otras causas que no sean la variación aleatoria. La siguiente figura representa las desviaciones estándar de todos los genes ordenados de menor a mayor valor. El gráfico muestra que los genes más variables son aquellos con una desviación estándar superior al 90-95% de todas las desviaciones estándar.
 
 ```{r}
 sds <- apply (exprs(eset_rma), 1, sd)
@@ -458,225 +426,23 @@ plot(1:length(sdsO), sdsO, main="Distribution of variability for all genes",
 abline(v=length(sds)*c(0.9,0.95))
 ```
 
-*Selección de genes expresados de forma diferencial*
+La función "Mclust" del paquete mclust https://cran.r-project.org/web/packages/mclust/mclust.pdf se usa para aplicar el modelo de mezcla gaussiana a la matriz de expresión génica ingresada. Además, también se generan archivos que contienen información sobre la media, la varianza, la proporción de mezcla y la asignación gaussiana del conjunto de datos.
 
 ```{r}
-experiment.design <- exprs(gset)
-colnames(experiment.design) <- sampleNames(gset)
+# BiocManager :: install("mclust")
+library(mclust) # Esta función devuelve un objeto que contiene el número de genes / sondas para seleccionar durante el proceso de selección de características.
 
-fit <- lmFit(expression.level, experiment.design)
-expression.level <- exprs(microarray.data)
-microarray.data <- rma(gset_raw)
-
-if (!requireNamespace("BiocManager", quietly = TRUE))
-    install.packages("BiocManager")
-
-BiocManager::install("htmg430pmcdf")
-library(htmg430pmcdf)
+mclustplot <- Mclust(eset_rma)
+summary(mclustplot)
+head(mclustplot)
+plot(mclustplot)
 ```
 
-# 8. Filtering least variable genes
-
-Filtrar aquellos genes cuya variabilidad se puede atribuir a la variación aleatoria, es decir, los genes que, razonablemente, no se espera que expresen diferencialmente, ha demostrado ser útil para reducir el número de pruebas que se realizarán con el aumento correspondiente en la potencia de Hackstadt y Hess (2009).
-
-La función nsFilter del paquete de bioconductores genefilter se puede utilizar para eliminar genes en función de un umbral de variabilidad. Si hay disponible un paquete de anotaciones -asociando identificadores de conjuntos de sondas e identificadores de genes de diferentes bases de datos-, también puede usarse para eliminar conjuntos de sondas que no tienen un identificador de gen asociado.
-
-```{r}
-require("htmg430pm.db")
-htmg430pmcdf::htmg430pmdim
-
-
-# NO SALE
-
-library(genefilter)
-library(htmg430pm)
-
-annotation(eset_rma) <- "htmg430pm"
-filtered <- nsFilter(eset_rma, require.entrez = TRUE, remove.dupEntrez = TRUE,
-                    var.filter=TRUE, var.func=IQR, var.cutoff=0.75, 
-                    filterByQuantile=TRUE, feature.exclude = "^AFFX")
-
-# Function nsFilter returns the filtered values and a report of the filtering results.
-
-print(filtered$filter.log)
-```
-
-Después de filtrar, quedan 5994 genes. Tenga en cuenta que hemos almacenado los genes que quedan en la variable eset_filtered
-
-# 9.  Saving normalized and filtered data
-
-Los datos filtrados normalizados son el punto de partida para futuros análisis, pero es posible que deseemos volver a ellos, por ejemplo, para revisar valores de expresión génica específicos. Es habitual guardar los objetos binarios, pero también escribir valores de expresión en archivos de texto o Excel. Escribir en Excel desde R no es una tarea trivial, por extraño que parezca, porque los diferentes paquetes funcionan de manera diferente según el sistema operativo, por lo que se omite del código.
-
-```{r}
-dir.create("./results")
-write.csv(exprs(eset_rma), file="./results/normalized.Data.csv")
-write.csv(exprs(eset_filtered), file="./results/normalized.Filtered.Data.csv")
-save(eset_rma, eset_filtered, file="./results/normalized.Data.Rda")
-```
-
-# 10. Defining the experimental setup: The design matrix
-
-El primer paso para el análisis basado en modelos lineales es crear la matriz de diseño. Básicamente es una tabla que describe la asignación de cada muestra a un grupo o condición experimental. Tiene tantas filas como muestras y tantas columnas como grupos (si solo se considera un factor). Cada fila contiene un uno en la columna del grupo al que pertenece la muestra y un cero en los demás.
-
-La matriz de diseño se puede definir manualmente o a partir de una variable de factor que puede haberse introducido en el archivo "objetivos" con este objetivo creado específicamente para ella. En este estudio, la variable "Grupo" es una combinación de las dos condiciones experimentales, "KO / Wild" y "RT / COLD", que se representan conjuntamente como un factor con 4 niveles.
-
-```{r}
-# if (!exists("eset_filtered")) load (file="./results/normalized.Data.Rda")
-
-library(limma)
-designMat<- model.matrix(~0+Group, pData(eset_filtered))
-colnames(designMat) <- c("KO.COLD", "KO.RT", "WT.COLD", "WT.RT")
-print(designMat)
-```
-
-# 11. Defining comparisons with the Contrasts Matrix
-
-```{r}
-cont.matrix <- makeContrasts (KOvsWT.COLD = KO.COLD-WT.COLD,
-                             KOvsWT.RT = KO.RT-WT.RT,
-                             INT = (KO.COLD-WT.COLD) - (KO.RT-WT.RT),
-                             levels=designMat)
-print(cont.matrix)
-```
-
-# 12. Model estimation and gene selection
-
-```{r}
-library(limma)
-fit<-lmFit(eset_filtered, designMat)
-fit.main<-contrasts.fit(fit, cont.matrix)
-fit.main<-eBayes(fit.main)
-class(fit.main)
-```
-
-# 13. Obtaining lists of differentially expressed genes
-```{r}
-#The limma package implements function topTable which contains, for a given contrast a list of genes ordered from smallest to biggest p–value which can be considered to be most to least differential expressed. For each gene the following statistics are provided:
-
-  #  logFC: Mean difference between groups.
-  #  AveExpr: Average expression of all genes in the comparison.
-  #  t : Moderated t-statistic (t-test-like statistic for the comparison).
-  #  P.Value: Test p–value.
-  #  adj.P.Val: Adjusted p–value following Benjamini and Hochberg (1995)
-  #  B: B-statistic: Posterior log odds of the gene of being vs non being differential expressed.
-
-# We can have a look at the first lines of each topTable.
-
-# For comparison 1 (KOvsWT.COLD): Genes that change their expression between KO and WT in cold temperature:
-
-topTab_KOvsWT.COLD <- topTable (fit.main, number=nrow(fit.main), coef="KOvsWT.COLD", adjust="fdr") 
-head(topTab_KOvsWT.COLD)
-
-topTab_KOvsWT.RT <- topTable (fit.main, number=nrow(fit.main), coef="KOvsWT.RT", adjust="fdr") 
-head(topTab_KOvsWT.RT)
-
-# For comparison 3 (INT): Genes that behave differently between comparison 1 and 2:
-
-topTab_INT  <- topTable (fit.main, number=nrow(fit.main), coef="INT", adjust="fdr") 
-head(topTab_INT)
-```
-
-# 14. Gene Annotation
-```{r}
-# Once we have the top table it is useful to provide additional information on the features that have been selected. This process is called “annotation” and essentially what it does is to look for information to associate identifiers that appear in the top table, usually corresponding to probesets or transcripts depending of the array type, with more familiar names such as the Gene Symbol, the Entrez Gene identifier or the Gene description.
-
-# For simplicity, because there are three toptables, a function annotating one topTable with a given package is prepared and used.
-
-annotatedTopTable <- function(topTab, anotPackage)
-{
- topTab <- cbind(PROBEID=rownames(topTab), topTab)
- myProbes <- rownames(topTab)
- thePackage <- eval(parse(text = anotPackage))
- geneAnots <- select(thePackage, myProbes, c("SYMBOL", "ENTREZID", "GENENAME"))
- annotatedTopTab<- merge(x=geneAnots, y=topTab, by.x="PROBEID", by.y="PROBEID")
-return(annotatedTopTab)
-}
-
-topAnnotated_KOvsWT.COLD <- annotatedTopTable(topTab_KOvsWT.COLD,
-anotPackage="mogene21sttranscriptcluster.db")
-topAnnotated_KOvsWT.RT <- annotatedTopTable(topTab_KOvsWT.RT,
-anotPackage="mogene21sttranscriptcluster.db")
-topAnnotated_INT <- annotatedTopTable(topTab_INT,
-anotPackage="mogene21sttranscriptcluster.db")
-write.csv(topAnnotated_KOvsWT.COLD, file="./results/topAnnotated_KOvsWT_COLD.csv")
-write.csv(topAnnotated_KOvsWT.RT, file="./results/topAnnotated_KOvsWT_RT.csv")
-write.csv(topAnnotated_INT, file="./results/topAnnotated_INT.csv")
-```
-
-# 15. Visualizing differential expression: VOlcano plot
-
-```{r}
-library(mogene21sttranscriptcluster.db)
-geneSymbols <- select(mogene21sttranscriptcluster.db, rownames(fit.main), c("SYMBOL"))
-SYMBOLS<- geneSymbols$SYMBOL
-volcanoplot(fit.main, coef=1, highlight=4, names=SYMBOLS, 
-           main=paste("Differentially expressed genes", colnames(cont.matrix)[1], sep="\n"))
-abline(v=c(-1,1))
-```
-
-*ANÁLISIS DE DATOS*
+## Algoritmos de selección de genes. Selección de genes expresados de forma diferencial
 
 Una vez preprocesados, tenemos dos tipos de análisis sobre datos de microarrays
 ! Estadística inferencial: determinar qué genes están expresados diferencialmente (DEGs) y si dicha expresión es significativa
 ! Estadística descriptiva: determinar grupos de genes que presentan patrones similares con PCA y cluster.
-
-*Estadística inferencial: T-TEST*
-*vOLCANOS PLOT*
-
-Todos estos modelos, al igual que el test-t, nos darán un pvalor para la significatividad de la expresión genética en cada contraste de condiciones 
-
-```{r}
-## Compute RMA expression values
-esetRMA = rma(rawdata)
-
-## Compare distributions of probes/probesets before/after
-pdf("boxplotProbes.pdf")
-boxplot(rawdata)
-dev.off()
-pdf("boxplotRMA.pdf")
-boxplot(exprs(esetRMA))
-dev.off()
-```
-
-
-# 16. Multiple comparisons
-
-# 17. Heatmaps
-
-# 18. Biological Significance of results
-
-Una vez que se obtiene una lista de genes que caracteriza la diferencia entre dos condiciones, debe interpretarse. Aunque esto requiere, por supuesto, una buena comprensión del problema biológico subyacente, un enfoque estadístico conocido como "Análisis de conjunto de genes" puede ser útil para sugerir ideas para la interpretación.
-
-Con este objetivo, estos tipos de análisis buscan establecer si, dada una lista de genes seleccionados por ser diferencial expresada entre dos condiciones, las funciones, procesos biológicos o vías moleculares que los caracterizan aparecen en esta lista con más frecuencia que entre el resto de los genes analizado.
-
-Hay muchas variantes de estos tipos de análisis, ver Khatri, Sirota y Butte (2012), pero aquí usaremos el análisis de enriquecimiento básico como se describe en implementado en el paquete ReactomePA Bioconductor. El análisis se realiza en la base de datos de anotaciones ReactomePA https://reactome.org/.
-
-Los análisis de este tipo necesitan un número mínimo de genes para ser confiables, preferiblemente unos pocos cientos que unas pocas docenas, por lo que es común realizar una selección menos restrictiva que con los pasos anteriores. Por ejemplo, una opción es incluir todos los genes con un límite de FDR no estricto, como FDR <0.15 sin filtrado por "cambio de pliegue" mínimo).
-
-Como primer paso, preparamos la lista de listas de genes que se analizarán:
-
-
-# 19. Resumen de resultados
-
-Una vez que el proceso se ha completado, se obtiene una lista de archivos, a veces larga, con los datos y los resultados del análisis. Estos archivos son la base para discutir los resultados y buscar una interpretación biológica. Ambos aspectos exceden los objetivos de este capítulo, por lo que se omiten aquí.
-
-Es útil crear un archivo con el tipo, nombre y descripción de todos los archivos generados a lo largo del análisis. La tabla @ref (tab: listOfFiles) muestra la lista de archivos generados en el estudio de caso actual.
-
-
-### 3. Que habéis hecho en cada paso (NO ES PRECISO entrar en el detalle de los métodos,más bien hacer una descripción cualitativa indicando porque se ha llevado a cabo cada paso, y cual ha sido el “input” suministrado al procedimiento y el “output” obtenido.
-
-## 4. Resultados
-Que se obtiene como resultado del análisis
-
-## 5. Discusión
-Que limitaciones consideramos que pueden haber en el estudio (si consideramos
-que hay alguna…)
-
-## 6. Conclusión: NO HACE FALTA. Vuestro “rol” aquí es técnico. 
-Como bioinformáticos se os presupondrá la capacidad de manejar la información biológica mediante los programas adecuados, pero ello no implica que debáis tener los conocimientos específicos que puede requerir la interpretación biológica de los resultados.
-
-## 7. Apéndice: 
-Podéis poner el código de R que hayáis utilizado en un apéndice con comentarios.
 
 ```{r}
 
@@ -709,14 +475,18 @@ sml <- paste("G", sml, sep="")    # set group names
 fl <- as.factor(sml)
 gset$description <- fl
 design <- model.matrix(~ description + 0, gset)
-colnames(design) <- levels(fl)
-fit <- lmFit(gset, design)
-cont.matrix <- makeContrasts(G1-G0, levels=design)
-fit2 <- contrasts.fit(fit, cont.matrix)
-fit2 <- eBayes(fit2, 0.01)
+colnames(design) <- levels(fl) #Defining the experimental setup: The design matrix
+fit <- lmFit(gset, design) # Model estimation and gene selection
+cont.matrix <- makeContrasts(G1-G0, levels=design) # contrastar
+fit2 <- contrasts.fit(fit, cont.matrix) # Multiple comparisons
+fit2 <- eBayes(fit2, 0.01) #Para ver los 10 primeros genes expresados diferencialmente, ordenados por el estadístico B, se utilizará la función topTable. 
+summary(fit2)
+
+# El paquete limma implementa la función topTable que contiene, para un contraste dado, una lista de genes ordenados del valor p más pequeño al más grande que puede considerarse como expresado de mayor a menor diferencial. Para cada gen se proporcionan las siguientes estadísticas:
+
 tT <- topTable(fit2, adjust="fdr", sort.by="B", number=250)
 
-tT <- subset(tT, select=c("ID","adj.P.Val","P.Value","t","B","logFC","SPOT_ID"))
+tT <- subset(tT, select=c("ID","adj.P.Val","P.Value","t","B","logFC","SPOT_ID")) #Obtaining lists of differentially expressed genes
 write.table(tT, file=stdout(), row.names=F, sep="\t")
 write.csv(tT, file= "./results/data_analisys.csv", sep = ",")
 
@@ -754,5 +524,125 @@ boxplot(ex, boxwex=0.6, notch=T, main=title, outline=FALSE, las=2, col=fl)
 legend("topleft", labels, fill=palette(), bty="n")
 
 ```
+
+Si queremos obtener todos los genes cuyo p-valor < 0.05, primero debemos almacenar en una variable todos los genes ordenados por el estadístico B.
+
+```{r}
+
+tabla13392<- topTable(fit2,coef=1,number=13392,genelist=fit2$genes,adjust.method="BH",sort.by="B")
+
+menores <- subset(tabla13392, P.Value < 0.005, c("ID","adj.P.Val","P.Value","t","B","logFC","SPOT_ID"))
+menores[1,]
+
+# Luego podemos observar visualmente el gen de mayor expresión diferencial de la siguiente forma:
+M<- fit2$coefficients
+A<- fit2$Amean
+plot (A, M, pch=".", col="lightblue", cex=2, main="Valores de M ajustados por eBayes")
+points(tabla13392$A[1], tabla13392$M[1], pch="*", col=2,cex=1);text(11.2,2.64,tabla13392[1,5])
+
+```
+
+# 14. Gene Annotation (cambiar)
+```{r}
+# Once we have the top table it is useful to provide additional information on the features that have been selected. This process is called “annotation” and essentially what it does is to look for information to associate identifiers that appear in the top table, usually corresponding to probesets or transcripts depending of the array type, with more familiar names such as the Gene Symbol, the Entrez Gene identifier or the Gene description.
+
+# For simplicity, because there are three toptables, a function annotating one topTable with a given package is prepared and used.
+
+annotatedTopTable <- function(topTab, anotPackage)
+{
+ topTab <- cbind(PROBEID=rownames(topTab), topTab)
+ myProbes <- rownames(topTab)
+ thePackage <- eval(parse(text = anotPackage))
+ geneAnots <- select(thePackage, myProbes, c("SYMBOL", "ENTREZID", "GENENAME"))
+ annotatedTopTab<- merge(x=geneAnots, y=topTab, by.x="PROBEID", by.y="PROBEID")
+return(annotatedTopTab)
+}
+
+annotation(data.raw)
+
+# cambiar a partir de aqui
+topAnnotated_KOvsWT.COLD <- annotatedTopTable(topTab_KOvsWT.COLD,
+anotPackage="htmg430pm")
+topAnnotated_KOvsWT.RT <- annotatedTopTable(topTab_KOvsWT.RT,
+anotPackage="htmg430pm")
+topAnnotated_INT <- annotatedTopTable(topTab_INT,
+anotPackage="htmg430pm")
+write.csv(topAnnotated_KOvsWT.COLD, file="./results/topAnnotated_KOvsWT_COLD.csv")
+write.csv(topAnnotated_KOvsWT.RT, file="./results/topAnnotated_KOvsWT_RT.csv")
+write.csv(topAnnotated_INT, file="./results/topAnnotated_INT.csv")
+```
+
+# 15. Visualizing differential expression: VOlcano plot
+
+```{r}
+plot(fit2$coef, fit2$lods, pch = 16, cex = 0.2, xlab = "log2 (Fold change)", ylab = "-log10(P-Value)", main=paste("Differentially expressed genes"))
+ord <- order(fit2$lods, decreasing = TRUE)
+top8 <- ord[1:8]
+text(fit2$coef[top8], fit2$lods[top8], labels = fit2$genes[top8,
+"Name"], cex = 0.8, col = "blue")
+
+
+```
+
+Podemos ardem'as representar los valores normalizados con log2, con un gr'afico PCA:
+
+```{r}
+pheno.data <- pData(gset)
+exp_raw <- log2(Biobase::exprs(gset))
+PCA_raw <- prcomp(t(exp_raw), scale. = FALSE)
+
+percentVar <- round(100*PCA_raw$sdev^2/sum(PCA_raw$sdev^2),1)
+sd_ratio <- sqrt(percentVar[2] / percentVar[1])
+
+dataGG <- data.frame(PC1 = PCA_raw$x[,1], PC2 = PCA_raw$x[,2],
+Disease = pheno.data$characteristics_ch1,
+Phenotype = pheno.data$`treatment:ch1`,
+Individual = pheno.data$`treatment:ch1`)
+
+ggplot(dataGG, aes(PC1, PC2)) +
+geom_point(aes(shape = Disease, colour = Phenotype)) +
+ggtitle("PCA plot of the log-transformed raw expression data") +
+xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
+ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+theme(plot.title = element_text(hjust = 0.5))+
+coord_fixed(ratio = sd_ratio) +
+scale_shape_manual(values = c(4,15)) + 
+scale_color_manual(values = c("darkorange2", "dodgerblue4"))
+
+```
+
+
+
+# 18. Biological Significance of results
+
+Una vez que se obtiene una lista de genes que caracteriza la diferencia entre dos condiciones, debe interpretarse. Aunque esto requiere, por supuesto, una buena comprensión del problema biológico subyacente, un enfoque estadístico conocido como "Análisis de conjunto de genes" puede ser útil para sugerir ideas para la interpretación.
+
+Con este objetivo, estos tipos de análisis buscan establecer si, dada una lista de genes seleccionados por ser diferencial expresada entre dos condiciones, las funciones, procesos biológicos o vías moleculares que los caracterizan aparecen en esta lista con más frecuencia que entre el resto de los genes analizado.
+
+Hay muchas variantes de estos tipos de análisis, ver Khatri, Sirota y Butte (2012), pero aquí usaremos el análisis de enriquecimiento básico como se describe en implementado en el paquete ReactomePA Bioconductor. El análisis se realiza en la base de datos de anotaciones ReactomePA https://reactome.org/.
+
+Los análisis de este tipo necesitan un número mínimo de genes para ser confiables, preferiblemente unos pocos cientos que unas pocas docenas, por lo que es común realizar una selección menos restrictiva que con los pasos anteriores. Por ejemplo, una opción es incluir todos los genes con un límite de FDR no estricto, como FDR <0.15 sin filtrado por "cambio de pliegue" mínimo).
+
+Como primer paso, preparamos la lista de listas de genes que se analizarán:
+
+
+# 19. Resumen de resultados
+
+Una vez que el proceso se ha completado, se obtiene una lista de archivos, a veces larga, con los datos y los resultados del análisis. Estos archivos son la base para discutir los resultados y buscar una interpretación biológica. Ambos aspectos exceden los objetivos de este capítulo, por lo que se omiten aquí.
+
+Es útil crear un archivo con el tipo, nombre y descripción de todos los archivos generados a lo largo del análisis. La tabla @ref (tab: listOfFiles) muestra la lista de archivos generados en el estudio de caso actual.
+
+## 4. Resultados
+Que se obtiene como resultado del análisis
+
+## 5. Discusión
+Que limitaciones consideramos que pueden haber en el estudio (si consideramos
+que hay alguna…)
+
+## 6. Conclusión: NO HACE FALTA. Vuestro “rol” aquí es técnico. 
+Como bioinformáticos se os presupondrá la capacidad de manejar la información biológica mediante los programas adecuados, pero ello no implica que debáis tener los conocimientos específicos que puede requerir la interpretación biológica de los resultados.
+
+## 7. Apéndice: 
+Podéis poner el código de R que hayáis utilizado en un apéndice con comentarios.
 
 <div/>
