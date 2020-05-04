@@ -1,5 +1,5 @@
 ---
-title: "<br><br>Análisis de datos Ómicos<br>Primera prueba de evaluación continua<br>"
+title: "<br><br>Análisis de datos Ómicos<br><br> - <br><br>Primera prueba de evaluación continua<br>"
 author: "Maria P. Plaza"
 date: "16/04/2020"
 output:
@@ -99,7 +99,11 @@ GSM3587206	QP-89 Model Nintedanib
 GSM3587207	QP-90 Model Nintedanib
 GSM3587208	QP-91 Model Nintedanib
 
-```{r echo=FALSE}
+Todos los archivos, asi como el codigo R empleado se encuentran en el siguiente repositorio GIT:
+
+https://github.com/mariaplaza/PEC1_DatosOmicos
+
+```{r echo=FALSE, warning=FALSE}
 # Para acceder a GEO Sample (GSM), GEO Series (GSE) (listas de archivos GSM que juntos forman un solo experimento) o GEO Dataset (GDS), empleamos la función getGEO()que devuelve una lista de ExpressionSets.
 
 library(GEOquery)
@@ -109,6 +113,7 @@ if (length(gset) > 1) idx <- grep("GPL21382", attr(gset, "names")) else idx <- 1
 gset <- gset[[idx]]
 fvarLabels(gset) <- make.names(fvarLabels(gset)) # make proper column names to match toptable 
 
+print("Genes y Muestras")
 dim(exprs(gset))
 pheno.data <- pData(gset)
 
@@ -123,8 +128,6 @@ data.raw = ReadAffy(celfile.path=celpath)
 #filePaths
 
 ```
-
-Los datos empleados en este estudio, podemos conocerlos más en detalle:
 
 ### 3. Pasos llevados a cabo.
 
@@ -331,25 +334,25 @@ plot(1:length(sdsO), sdsO, main="Distribution of variability for all genes",
 abline(v=length(sds)*c(0.9,0.95))
 ```
 
-Empleamos la función "Mclust" del paquete mclust para aplicar el modelo de mezcla gaussiana a la matriz de expresión génica ingresada. Además, también se generan archivos que contienen información sobre la media, la varianza, la proporción de mezcla y la asignación gaussiana del conjunto de datos.
+Podemos empleamos la función "Mclust" del paquete mclust para aplicar el modelo de mezcla gaussiana a la matriz de expresión génica ingresada. Además, también se generan archivos que contienen información sobre la media, la varianza, la proporción de mezcla y la asignación gaussiana del conjunto de datos.
 
-```{r echo=FALSE}
+```{r eval=FALSE, include=FALSE}
 # BiocManager :: install("mclust")
-library(mclust) # Esta función devuelve un objeto que contiene el número de genes / sondas para seleccionar durante el proceso de selección de características.
+library(mclust)
+# mclustplot <- Mclust(eset_rma)
+# summary(mclustplot)
 
-mclustplot <- Mclust(eset_rma)
-summary(mclustplot)
-head(mclustplot)
-plot(mclustplot)
 ```
 
 ## Algoritmos de selección de genes. Selección de genes expresados de forma diferencial
 
 Una vez que hemos obtenido una estimación de los niveles de expresión de cada gen podemos pasar a determinar los genes que cambian su expresión debido a la inyección de N-nitrosodietilamina seguida de dosis semanales de tetracloruro de carbono.
 
-Una vez preprocesados, tenemos dos tipos de análisis sobre datos de microarrays
-! Estadística inferencial: determinar qué genes están expresados diferencialmente (DEGs) y si dicha expresión es significativa
-! Estadística descriptiva: determinar grupos de genes que presentan patrones similares con PCA y cluster.
+Una vez preprocesados, tenemos dos tipos de análisis sobre datos de microarrays:
+
+1. Estadística inferencial: determinar qué genes están expresados diferencialmente (DEGs) y si dicha expresión es significativa. Para ello creamos una matriz que indique que muestras son réplicas biológicas de la misma condición, con la funci'on *model.matrix*. Veamos solo las 6 primeras muestras.
+
+La función *toptable* recibe como entrada la salida de eBayes, el número de genes a mostrar (argumento number) y el identificador de la comparación a tener en cuenta (argumento coef). Podemos ver la cabecera de este marco de datos con la función head. Veamos los primeros datos de esta tabla. Por ejemplo, para ver la información de expresión diferencial sobre todos los genes (13392) de la primera comparación:
 
 ```{r echo=FALSE}
 
@@ -369,7 +372,7 @@ design <- model.matrix(~ description + 0, gset)
 colnames(design) <- levels(fl) # Definición de la configuración experimental: la matriz de diseño
 fit <- lmFit(gset, design) # Estimación del modelo y selección de genes.
 
-# El primer paso para poder seleccionar los genes expresados de forma diferencial consiste en crear una matriz que contenga el diseño experimental, es decir, una matriz que indique que muestras son réplicas biológicas de la misma condición (punto en la serie temporal de períodos de luz y oscuridad). Esto lo realizamos con la función model.matrix. Seguidamente es aconsejable nombrar las columnas de esta matriz con el nombre de las condiciones o puntos en la serie temporal
+# El primer paso para poder seleccionar los genes expresados de forma diferencial consiste en crear una matriz que contenga el diseño experimental, es decir, una matriz que indique que muestras son réplicas biológicas de la misma condición. Esto lo realizamos con la función model.matrix. Seguidamente es aconsejable nombrar las columnas de esta matriz con el nombre de las condiciones.
 
 cont.matrix <- makeContrasts(G1-G0, levels=design) # contrastar
 fit2 <- contrasts.fit(fit, cont.matrix) # Multiple comparisons
@@ -381,11 +384,36 @@ summary(fit2)
 tT <- topTable(fit2, adjust="fdr", sort.by="B", number=250)
 
 tT <- subset(tT, select=c("ID","adj.P.Val","P.Value","t","B","logFC","SPOT_ID")) #Obtaining lists of differentially expressed genes
-write.table(tT, file=stdout(), row.names=F, sep="\t")
-write.csv(tT, file= "./results/data_analisys.csv", sep = ",")
+# write.table(tT, file=stdout(), row.names=F, sep="\t")
+# write.csv(tT, file= "./results/data_analisys.csv", sep = ",")
 
+head(tT)
 
-################################################################
+```
+
+La primera columna ID contiene el identificador de la sonda que representa a cada gen en el microarrays. La columna logFC representa el fold-change en log2 entre las dos condiciones experimentales. La columna AveExpr presenta el valor medio de expresión de cada gen en todas las condiciones experimentales consideradas. La columna t muestra el p-valor del correspondiente constrate de hipótesis basado en una t-student moderada. La columna P.Value es el p-valor correspondiente mientras que la columna adj.P.Value es el p-valor ajustado para controlar la proporción de falsos descubrimientos o falsos positivos (false discovery rate).
+
+Por ejemplo, la sonda con identificador 14245_at que representa un gen cuya proteína tiene lipin 1 presenta un fold-change en log2 de 0.2497512. Por lo tanto, su nivel de expresión se ha incrementado en $2^(0.2497512)=1.189$ veces más. Este incremento es altamente significativo según el valor del estadístco t-student de 7.560906 con un p-valor de 7.920846e-08 incluso con un p-valor ajustado para el false discovery rate de 0.0007044322.
+
+Si queremos obtener todos los genes cuyo p-valor < 0.05, primero debemos almacenar en una variable todos los genes ordenados por el estadístico B. 
+
+```{r echo=FALSE}
+
+menores <- subset(tT, P.Value < 0.005, c("ID","adj.P.Val","P.Value","t","B","logFC","SPOT_ID"))
+menores[1,]
+
+# Luego podemos observar visualmente el gen de mayor expresión diferencial de la siguiente forma:
+M<- fit2$coefficients
+A<- fit2$Amean
+plot (A, M, pch=".", col="lightblue", cex=2, main="Valores de M ajustados por eBayes")
+points(tT$A[1], tT$M[1], pch="*", col=2,cex=1);text(11.2,2.64,tT[1,5])
+
+```
+
+2. Estadística descriptiva: determinar grupos de genes que presentan patrones similares gr'aficos.
+
+```{r include=FALSE}
+
 # Boxplot
 # order samples by group
 ex <- exprs(gset)[ , order(sml)]
@@ -399,10 +427,13 @@ dev.new(width=4+dim(gset)[[2]]/5, height=6)
 par(mar=c(2+round(max(nchar(sampleNames(gset)))/2),4,2,1))
 title <- paste ("GSE125975", '/', annotation(gset), " selected samples", sep ='')
 
+```
+
+```{r echo=FALSE}
 boxplot(ex, boxwex=0.6, notch=T, main=title, outline=FALSE, las=2, col=fl)
 legend("topleft", labels, fill=palette(), bty="n")
-
 ```
+
 
 **Visualización de expresión diferencial: Volcano plot**
 
@@ -416,32 +447,6 @@ text(fit2$coef[top8], fit2$lods[top8], labels = fit2$genes[top8,
 
 ```
 
-La función *toptable* recibe como entrada la salida de eBayes, el número de genes a mostrar (argumento number) y el identificador de la comparación a tener en cuenta (argumento coef). Podemos ver la cabecera de este marco de datos con la función head. Veamos los primeros datos de esta tabla. Por ejemplo, para ver la información de expresión diferencial sobre todos los genes (13392) de la primera comparación:
-
-```{r echo=FALSE}
-tabla13392<- topTable(fit2,coef=1,number=13392,genelist=fit2$genes,adjust.method="BH",sort.by="B")
-head(tabla13392)
-```
-
-La primera columna ID contiene el identificador de la sonda que representa a cada gen en el microarrays. La columna logFC representa el fold-change en log2 entre las dos condiciones experimentales. La columna AveExpr presenta el valor medio de expresión de cada gen en todas las condiciones experimentales consideradas. La columna t muestra el p-valor del correspondiente constrate de hipótesis basado en una t-student moderada. La columna P.Value es el p-valor correspondiente mientras que la columna adj.P.Value es el p-valor ajustado para controlar la proporción de falsos descubrimientos o falsos positivos (false discovery rate).
-
-Por ejemplo, la sonda con identificador 14245_at que representa un gen cuya proteína tiene lipin 1 presenta un fold-change en log2 de 0.2497512. Por lo tanto, su nivel de expresión se ha incrementado en $2^(0.2497512)=1.189$ veces más. Este incremento es altamente significativo según el valor del estadístco t-student de 7.560906 con un p-valor de 7.920846e-08 incluso con un p-valor ajustado para el false discovery rate de 0.0007044322.
-
-Si queremos obtener todos los genes cuyo p-valor < 0.05, primero debemos almacenar en una variable todos los genes ordenados por el estadístico B. 
-
-```{r echo=FALSE}
-
-menores <- subset(tabla13392, P.Value < 0.005, c("ID","adj.P.Val","P.Value","t","B","logFC","SPOT_ID"))
-menores[1,]
-
-# Luego podemos observar visualmente el gen de mayor expresión diferencial de la siguiente forma:
-M<- fit2$coefficients
-A<- fit2$Amean
-plot (A, M, pch=".", col="lightblue", cex=2, main="Valores de M ajustados por eBayes")
-points(tabla13392$A[1], tabla13392$M[1], pch="*", col=2,cex=1);text(11.2,2.64,tabla13392[1,5])
-
-```
-
 La forma más simple de seleccionar genes expresados de forma diferencial se basa en el fold-change de sus niveles de expresión. Esto consiste en comprobar qué genes han visto sus niveles de expresión incrementados o disminuidos en un factor lo suficientemente grande. Esta metodología es interpretable biológicamente y es la más usada cuando se dispone de un bajo número de réplicas. Sin embargo, ignora cualquier análisis estadístico que mida la variabilidad y reproducibilidad de los resultados obtenidos.
 
 Seleccionaremos como genes expresados de forma diferencial aquellos cuyos niveles de expresión presentan un fold-change en log2 superior a un umbral prefijado, típicamente 1, 2 ó 3 que corresponde a 2, 4 u 8 sobre los datos no transformados por log2. Adicionalmente, impondremos que esta diferencia sea significativa exigiendo p-valores menores a un umbral perfijado típicamente 0.05, 0.01 o 0.001. En nuestro ejemplo consideraremos genes expresados de forma diferencial como aquellos con un fold-change superior a 0.1 (0.2 en datos no transformados por log2) con una significancia del 99%.
@@ -449,9 +454,9 @@ Seleccionaremos como genes expresados de forma diferencial aquellos cuyos nivele
 Para realizar esta selección es necesario extraer del marco de datos los fold-changes, los exponentes de los correspondientes p-valores aplicando el - log10 y los identificadores de cada gen:
 
 ```{r}
-fold.change <- tabla13392[["logFC"]]
-log.p.value <- -log10(tabla13392[["adj.P.Val"]])
-probe.names <- tabla13392[["ID"]]
+fold.change <- tT[["logFC"]]
+log.p.value <- -log10(tT[["adj.P.Val"]])
+probe.names <- tT[["ID"]]
 ```
 
 Determinamos como genes activados de forma diferencial aquellos cuyo fold-change es superior a 0.1 con una significancia mayor de 99% (p-valor menor 0.01 por lo tanto el correspondiente exponente obtenido como - log10 debe ser mayor de 0.2). De forma análoga determinamos como genes inhibidos de forma diferencial aquellos cuyo fold.change es inferior a -0.1 (esto corresponde a genes que ven su expresión disminuida en menos de la mitad) con una significancia mayor del 99%:
@@ -497,24 +502,31 @@ A la vista de los resultados obtenidos se puede afirmar que hay una relación le
 ## 7. Apéndice: Código R
 
 ```{r eval=FALSE}
-# Para acceder a GEO Sample (GSM), GEO Series (GSE) (listas de archivos GSM que juntos forman un solo experimento) o GEO Dataset (GDS), empleamos la función getGEO()que devuelve una lista de ExpressionSets.
+# Para acceder a GEO Sample (GSM), GEO Series (GSE) (listas de archivos GSM que juntos 
+# forman un solo experimento) o GEO Dataset (GDS), empleamos la función getGEO() que 
+# devuelve una lista de ExpressionSets.
 
 library(GEOquery)
 library(affy)
 gset <- getGEO("GSE125975", GSEMatrix =TRUE, AnnotGPL=FALSE)
 if (length(gset) > 1) idx <- grep("GPL21382", attr(gset, "names")) else idx <- 1
 gset <- gset[[idx]]
-fvarLabels(gset) <- make.names(fvarLabels(gset)) # make proper column names to match toptable 
+# make proper column names to match toptable 
+fvarLabels(gset) <- make.names(fvarLabels(gset)) 
 
 dim(exprs(gset))
 pheno.data <- pData(gset)
 
-# tambien podemos obtener los datos RAW. descargando los datos directamente de la pagina a nuestra carpeta de trabajo, despues usamos affy pa leer los datos.
+# tambien podemos obtener los datos RAW. descargando los datos directamente de la 
+# pagina a nuestra carpeta de trabajo, despues usamos affy pa leer los datos.
 
 celpath <- "./GSE125975_RAW"
 data.raw = ReadAffy(celfile.path=celpath)
 
-# la getGEOSuppFiles() función creará un directorio dentro del directorio de trabajo actual para almacenar los datos sin procesar. Aquí, las rutas de los archivos descargados (a menudo con una extensión .tar) se almacenan en un marco de datos llamado filePaths.
+# la getGEOSuppFiles() función creará un directorio dentro del directorio de 
+# trabajo actual para almacenar los datos sin procesar. Aquí, las rutas de los 
+# archivos descargados (a menudo con una extensión .tar) se almacenan en un marco 
+# de datos llamado filePaths.
 
 #filePaths = getGEOSuppFiles("GSE125975")
 #filePaths
@@ -555,7 +567,8 @@ library(ggplot2)
 library(ggrepel)
 
 # Creamos la función necesaria
-plotPCA <- function (datos, labels, factor, title, scale,colores, size = 1.5, glineas = 0.25) {
+plotPCA <- function (datos, labels, factor, title, scale,colores, size = 1.5, 
+                     glineas = 0.25) {
  data <- prcomp(t(datos),scale=scale)
  # plot adjustments
  dataDf <- data.frame(data$x)
@@ -570,7 +583,8 @@ plotPCA <- function (datos, labels, factor, title, scale,colores, size = 1.5, gl
    coord_cartesian(xlim = c(min(data$x[,1])-5,max(data$x[,1])+5)) +
    scale_fill_discrete(name = "Group")
  # avoiding labels superposition
- p1 + geom_text_repel(aes(y = PC2 + 0.25, label = labels),segment.size = 0.25, size = size) + 
+ p1 + geom_text_repel(aes(y = PC2 + 0.25, label = labels),segment.size = 0.25, 
+                      size = size) + 
    labs(x = c(paste("PC1",loads[1],"%")),y=c(paste("PC2",loads[2],"%"))) +  
    ggtitle(paste("Principal Component Analysis for: ",title,sep=" "))+ 
    theme(plot.title = element_text(hjust = 0.5)) +
@@ -578,7 +592,8 @@ plotPCA <- function (datos, labels, factor, title, scale,colores, size = 1.5, gl
 }
 
 # lo dibujamos
-plotPCA(exprs(data.raw), labels = pheno.data$characteristics_ch1, factor = pheno.data$`treatment:ch1`, 
+plotPCA(exprs(data.raw), labels = pheno.data$characteristics_ch1, 
+        factor = pheno.data$`treatment:ch1`, 
       title="Raw data", scale = FALSE, size = 3, 
       colores = c("red", "blue", "green", "yellow"))
 
@@ -586,17 +601,22 @@ plotPCA(exprs(data.raw), labels = pheno.data$characteristics_ch1, factor = pheno
 
 eset_rma <- rma(data.raw)
 
-# Podemos realizar la normalización con otro tipo de funciones, con el paquete *limma* y/o *edgeR*.
+# Podemos realizar la normalización con otro tipo de funciones, con el 
+# paquete *limma* y/o *edgeR*.
 
 library(limma)
 library(edgeR)
 
-plotMDS(gset) #Esta función grafica las muestras en un diagrama de dispersión bidimensional para que las distancias en el gráfico se aproximen a los cambios típicos de pliegue log2 entre las muestras.
+plotMDS(gset) #Esta función grafica las muestras en un diagrama de dispersión 
+# bidimensional para que las distancias en el gráfico se aproximen a los cambios 
+# típicos de pliegue log2 entre las muestras.
 
-calcNormFactors(gset) #Calcula los factores de normalización para escalar los datos.
+calcNormFactors(gset) # Calcula los factores de normalización para escalar los datos.
 
 library(limma)
-# La siguiente funcion normaliza las intensidades de expresión para que las intensidades o las proporciones logarítmicas tengan distribuciones similares en un conjunto de matrices
+# La siguiente funcion normaliza las intensidades de expresión para que las 
+# intensidades o las proporciones logarítmicas tengan distribuciones similares 
+# en un conjunto de matrices
 exprs1 = normalizeBetweenArrays(exprs(gset),method = "quantile") 
 head(exprs1)
 
@@ -606,13 +626,15 @@ head(exprs1)
 
 ## Control de calidad de datos normalizados
 
-qc_rma <- arrayQualityMetrics(eset_rma, outdir = file.path("./results", "QCraw.Norm"), force=TRUE)
+qc_rma <- arrayQualityMetrics(eset_rma, outdir = file.path("./results", 
+                                                           "QCraw.Norm"), force=TRUE)
 
 head(qc_rma)
 
 # PCA y boxplot
 
-plotPCA(exprs(eset_rma), labels = pheno.data$characteristics_ch1, factor = pheno.data$`treatment:ch1`, 
+plotPCA(exprs(eset_rma), labels = pheno.data$characteristics_ch1, 
+        factor = pheno.data$`treatment:ch1`, 
         title="Normalized data", scale = FALSE, size = 3, 
         colores = c("red", "blue", "green", "yellow"))
 
@@ -638,14 +660,16 @@ plot(1:length(sdsO), sdsO, main="Distribution of variability for all genes",
 abline(v=length(sds)*c(0.9,0.95))
 
 # BiocManager :: install("mclust")
-library(mclust) # Esta función devuelve un objeto que contiene el número de genes / sondas para seleccionar durante el proceso de selección de características.
+# library(mclust) 
+# mclustplot <- Mclust(eset_rma) # Esta función devuelve un objeto que 
+# contiene el número de genes / sondas para seleccionar durante el proceso 
+# de selección de características.
+# summary(mclustplot)
+# head(mclustplot)
+# plot(mclustplot)
 
-mclustplot <- Mclust(eset_rma)
-summary(mclustplot)
-head(mclustplot)
-plot(mclustplot)
-
-## Algoritmos de selección de genes. Selección de genes expresados de forma diferencial
+## Algoritmos de selección de genes. Selección de genes expresados de 
+# forma diferencial
 
 # nombres de grupo para todas las muestras
 gsms <- "0000000000001111111111"
@@ -660,23 +684,34 @@ sml <- paste("G", sml, sep="")    # set group names
 fl <- as.factor(sml)
 gset$description <- fl
 design <- model.matrix(~ description + 0, gset)
-colnames(design) <- levels(fl) # Definición de la configuración experimental: la matriz de diseño
+colnames(design) <- levels(fl) # Definición de la configuración experimental: 
+# la matriz de diseño
 fit <- lmFit(gset, design) # Estimación del modelo y selección de genes.
 
-# El primer paso para poder seleccionar los genes expresados de forma diferencial consiste en crear una matriz que contenga el diseño experimental, es decir, una matriz que indique que muestras son réplicas biológicas de la misma condición (punto en la serie temporal de períodos de luz y oscuridad). Esto lo realizamos con la función model.matrix. Seguidamente es aconsejable nombrar las columnas de esta matriz con el nombre de las condiciones o puntos en la serie temporal
+# El primer paso para poder seleccionar los genes expresados de forma diferencial 
+# consiste en crear una matriz que contenga el diseño experimental, es decir, una 
+# matriz que indique que muestras son réplicas biológicas de la misma condición. 
+# Esto lo realizamos con la función model.matrix. Seguidamente es aconsejable 
+# nombrar las columnas de esta matriz con el nombre de las condiciones o puntos 
+# en la serie temporal
 
 cont.matrix <- makeContrasts(G1-G0, levels=design) # contrastar
 fit2 <- contrasts.fit(fit, cont.matrix) # Multiple comparisons
-fit2 <- eBayes(fit2, 0.01) # Para ver los 10 primeros genes expresados diferencialmente, ordenados por el estadístico B, se utilizará la función topTable. 
+fit2 <- eBayes(fit2, 0.01) # Para ver los 10 primeros genes expresados 
+# diferencialmente, ordenados por el estadístico B, se utilizará la función topTable. 
 summary(fit2)
 
-# El paquete limma implementa la función topTable que contiene, para un contraste dado, una lista de genes ordenados del valor p más pequeño al más grande que puede considerarse como expresado de mayor a menor diferencial. Para cada gen se proporcionan las siguientes estadísticas:
+# El paquete limma implementa la función topTable que contiene, para un 
+# contraste dado, una lista de genes ordenados del valor p más pequeño al más 
+# grande que puede considerarse como expresado de mayor a menor diferencial. 
+# Para cada gen se proporcionan las siguientes estadísticas:
 
 tT <- topTable(fit2, adjust="fdr", sort.by="B", number=250)
 
-tT <- subset(tT, select=c("ID","adj.P.Val","P.Value","t","B","logFC","SPOT_ID")) #Obtaining lists of differentially expressed genes
-write.table(tT, file=stdout(), row.names=F, sep="\t")
-write.csv(tT, file= "./results/data_analisys.csv", sep = ",")
+tT <- subset(tT, select=c("ID","adj.P.Val","P.Value","t","B","logFC","SPOT_ID")) 
+#Obtaining lists of differentially expressed genes
+# write.table(tT, file=stdout(), row.names=F, sep="\t")
+# write.csv(tT, file= "./results/data_analisys.csv", sep = ",")
 
 ################################################################
 # Boxplot
@@ -698,28 +733,29 @@ legend("topleft", labels, fill=palette(), bty="n")
 
 # Visualización de expresión diferencial: Volcano plot**
 
-plot(fit2$coef, fit2$lods, pch = 16, cex = 0.2, xlab = "log2 (Fold change)", ylab = "-log10(P-Value)", main=paste("Differentially expressed genes"))
+plot(fit2$coef, fit2$lods, pch = 16, cex = 0.2, 
+     xlab = "log2 (Fold change)", ylab = "-log10(P-Value)", 
+     main=paste("Differentially expressed genes"))
 ord <- order(fit2$lods, decreasing = TRUE)
 top8 <- ord[1:8]
 text(fit2$coef[top8], fit2$lods[top8], labels = fit2$genes[top8,
 "Name"], cex = 0.8, col = "blue")
 
-# Tabla
-tabla13392<- topTable(fit2,coef=1,number=13392,genelist=fit2$genes,adjust.method="BH",sort.by="B")
-head(tabla13392)
-
-menores <- subset(tabla13392, P.Value < 0.005, c("ID","adj.P.Val","P.Value","t","B","logFC","SPOT_ID"))
+menores <- subset(tT, P.Value < 0.005, c("ID","adj.P.Val",
+                                         "P.Value","t","B","logFC","SPOT_ID"))
 menores[1,]
 
-# Luego podemos observar visualmente el gen de mayor expresión diferencial de la siguiente forma:
+# Luego podemos observar visualmente el gen de mayor expresión 
+# diferencial de la siguiente forma:
 M<- fit2$coefficients
 A<- fit2$Amean
-plot (A, M, pch=".", col="lightblue", cex=2, main="Valores de M ajustados por eBayes")
-points(tabla13392$A[1], tabla13392$M[1], pch="*", col=2,cex=1);text(11.2,2.64,tabla13392[1,5])
+plot (A, M, pch=".", col="lightblue", cex=2, 
+      main="Valores de M ajustados por eBayes")
+points(tT$A[1], tT$M[1], pch="*", col=2,cex=1);text(11.2,2.64,tT[1,5])
 
-fold.change <- tabla13392[["logFC"]]
-log.p.value <- -log10(tabla13392[["adj.P.Val"]])
-probe.names <- tabla13392[["ID"]]
+fold.change <- tT[["logFC"]]
+log.p.value <- -log10(tT[["adj.P.Val"]])
+probe.names <- tT[["ID"]]
 
 activated <- (fold.change > 0.1) & (log.p.value > 0.2)
 inhibited <- (fold.change < - 0.1) & (log.p.value > 0.2)
@@ -730,7 +766,8 @@ inhibited.genes <- probe.names[inhibited]
 length(activated.genes)
 length(inhibited.genes)
 
-plot(fold.change,log.p.value,pch=19,cex=0.5,col="grey",ylab="-log10(p value)",xlab="log2 fold change")
+plot(fold.change,log.p.value,pch=19,cex=0.5,col="grey",
+     ylab="-log10(p value)",xlab="log2 fold change")
 points(fold.change[activated],log.p.value[activated],pch=19,cex=0.5,col="red")
 points(fold.change[inhibited],log.p.value[inhibited],pch=19,cex=0.5,col="blue")
 
